@@ -150,3 +150,129 @@ export const api = {
   refundRequest: (requestId: string) => request<RefundRequestView>('GET', `/customer/refund-requests/${requestId}`),
   refundRequests: () => request<RefundRequestView[]>('GET', '/customer/refund-requests'),
 }
+
+// ---------------------------------------------------------------------------
+// Support dashboard (Bearer admin token, kept in memory only)
+
+export type ResolutionOutcome = 'APPROVED' | 'PARTIALLY_APPROVED' | 'DENIED'
+export type QueueView = 'needs-review' | 'all'
+
+export interface QueueQuery {
+  view: QueueView
+  status?: RequestStatus
+  q?: string
+  page: number
+  pageSize: number
+}
+
+export interface QueueRow {
+  requestId: string
+  createdAt: string
+  source: 'CUSTOMER' | 'SEED'
+  customerName: string
+  customerEmail: string
+  orderNumber: string
+  reason: RefundReason
+  requestedAmountMinor: number
+  status: RequestStatus
+  approvedAmountMinor: number
+  reasons: string[]
+  resolution: ResolutionOutcome | null
+}
+
+export interface AiStatus {
+  status: 'ok' | 'degraded' | 'disabled'
+  provider: string | null
+  model: string | null
+  lastError: string | null
+}
+
+export interface AdminMetrics {
+  generatedAt: string
+  requests: { total: number; last24Hours: number; processing: number; approved: number; denied: number; escalated: number; awaitingReview: number }
+  resolutions: { approved: number; partiallyApproved: number; denied: number }
+  topEscalationReasons: { reason: string; count: number }[]
+  stuckProcessingCount: number
+  ai: AiStatus
+}
+
+export interface ConversationFlags {
+  injectionAttempt: boolean
+  mentionsOtherCustomerOrder: boolean
+  abusive: boolean
+  offTopic: boolean
+}
+
+interface ClaimSide {
+  reason: RefundReason
+  lines: { itemName: string; quantity: number }[]
+}
+
+export interface CaseBrief {
+  request: { requestId: string; source: string; state: string; createdAt: string; attempts: number; reasonConfirmed: RefundReason; reasonOverridden: boolean }
+  customer: { name: string; email: string }
+  order: { orderNumber: string; placedAt: string; deliveredAt: string | null; currency: string }
+  lines: {
+    lineId: string
+    itemName: string
+    sku: string
+    finalSale: boolean
+    quantity: number
+    amountMinor: number
+    lineOutcome: 'ALLOW' | 'DENY' | 'REVIEW' | null
+    decidingRuleId: string | null
+    publicReason: string | null
+    finalLineStatus: 'REFUNDED' | 'NOT_REFUNDED' | 'UNDER_REVIEW' | null
+  }[]
+  decision: {
+    status: RequestStatus
+    approvedAmountMinor: number
+    escalationReasons: string[]
+    customerMessage: string
+    messageSource: 'AI' | 'TEMPLATE'
+    policyVersion: string
+    gateResult: { policyStatus?: RequestStatus; reasons?: string[]; assessment?: string } | null
+    ruleTrace: unknown
+    decidedAt: string
+  } | null
+  resolution: {
+    outcome: ResolutionOutcome
+    approvedAmountMinor: number
+    reviewerNote: string
+    customerMessage: string
+    lines: { lineId: string; itemName: string; approve: boolean }[]
+    resolvedAt: string
+  } | null
+  conversation: {
+    conversationId: string
+    mode: 'AI' | 'MANUAL'
+    handoverReason: string | null
+    flags: ConversationFlags
+    priorFlaggedConversation: boolean
+    transcript: { role: 'CUSTOMER' | 'ASSISTANT'; text: string; typed: boolean; at: string }[]
+    evidenceQuotes: string[]
+  } | null
+  claim: { proposed: (ClaimSide & { confidence: number }) | null; confirmed: ClaimSide; reasonOverridden: boolean; itemsNotDiscussed: string[] }
+  aiSummary: { summary: string; suggestedAction: 'APPROVE' | 'DENY' | 'NEEDS_INFO'; rationale: string } | null
+  aiSummarySuppressed: boolean
+  aiCalls: { kind: string; provider: string | null; model: string | null; outcome: string; attempts: number; latencyMs: number; inputTokens: number | null; outputTokens: number | null; at: string }[]
+  audit: { type: string; actor: string; data: unknown; at: string }[]
+}
+
+export function adminApi(token: string) {
+  const auth = { Authorization: `Bearer ${token}` }
+  return {
+    metrics: () => request<AdminMetrics>('GET', '/admin/metrics', { headers: auth }),
+    queue: (query: QueueQuery) => {
+      const params = new URLSearchParams({ view: query.view, page: String(query.page), pageSize: String(query.pageSize) })
+      if (query.status) params.set('status', query.status)
+      if (query.q) params.set('q', query.q)
+      return request<{ items: QueueRow[]; total: number; page: number; pageSize: number }>('GET', `/admin/refund-requests?${params}`, { headers: auth })
+    },
+    caseBrief: (requestId: string) => request<CaseBrief>('GET', `/admin/refund-requests/${requestId}`, { headers: auth }),
+    resolve: (requestId: string, lineDecisions: { lineId: string; approve: boolean }[], reviewerNote: string) =>
+      request<CaseBrief>('POST', `/admin/refund-requests/${requestId}/resolution`, { headers: auth, body: { lineDecisions, reviewerNote } }),
+  }
+}
+
+export type AdminApi = ReturnType<typeof adminApi>

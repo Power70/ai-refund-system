@@ -9,3 +9,14 @@ export function formatDate(iso: string): string {
 export function formatTime(iso: string): string {
   return new Intl.DateTimeFormat('en-US', { hour: 'numeric', minute: '2-digit' }).format(new Date(iso))
 }
+
+// Codes whose generated wording would be unclear.
+const CODE_LABELS: Record<string, string> = { DEFAULT: 'No rule matched', PARTIALLY_APPROVED: 'Partly approved' }
+
+/** Turns a code such as NO_AI_ASSESSMENT into "No AI assessment". */
+export function formatCode(code: string): string {
+  if (CODE_LABELS[code]) return CODE_LABELS[code]
+  const words = code.toLowerCase().split('_').map((w) => (['ai', 'id', 'sku'].includes(w) ? w.toUpperCase() : w))
+  const text = words.join(' ')
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}

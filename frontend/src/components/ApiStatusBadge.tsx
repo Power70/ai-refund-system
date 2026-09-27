@@ -1,5 +1,5 @@
 import { IconAlertTriangle, IconCircleCheck } from '@tabler/icons-react'
-import type { ApiHealthState } from '../hooks/useApiHealth'
+import type { ApiHealthState } from '../hooks/usePolledData'
 import { Spinner } from './ui'
 
 interface ApiStatusBadgeProps {

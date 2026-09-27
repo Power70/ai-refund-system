@@ -1,5 +1,5 @@
 import { IconLoader2, type Icon } from '@tabler/icons-react'
-import { useEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from 'react'
+import { useEffect, useRef, type ComponentProps, type FormEvent, type ReactNode } from 'react'
 
 export const focusRing = 'focus-visible:ring-2 focus-visible:ring-indigo-300 focus-visible:outline-none'
 export const inputClass = 'rounded-lg border border-slate-300 px-3 py-2 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 focus:outline-none'
@@ -16,7 +16,7 @@ export function Spinner({ size = 16, className = '' }: { size?: number; classNam
   return <IconLoader2 size={size} aria-hidden="true" className={`animate-spin motion-reduce:animate-none ${className}`} />
 }
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+interface ButtonProps extends ComponentProps<'button'> {
   variant?: keyof typeof BUTTON_VARIANTS
   icon?: Icon
   busy?: boolean
@@ -55,5 +55,44 @@ export function ChatCard({ labelledBy, focusKey, className = 'border-slate-200',
     <section ref={card} tabIndex={-1} aria-labelledby={labelledBy} className={`rounded-2xl border bg-white p-4 shadow-sm focus:outline-none sm:ml-10 ${className}`}>
       {children}
     </section>
+  )
+}
+
+export function Alert({ children }: { children: ReactNode }) {
+  return (
+    <p role="alert" className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700">
+      {children}
+    </p>
+  )
+}
+
+interface SignInLayoutProps {
+  icon: Icon
+  iconClassName: string
+  title: string
+  subtitle: string
+  onSubmit: (event: FormEvent) => void
+  children: ReactNode
+  after?: ReactNode
+}
+
+/** Centered sign-in form shared by the customer and admin entry pages. */
+export function SignInLayout({ icon: HeaderIcon, iconClassName, title, subtitle, onSubmit, children, after }: SignInLayoutProps) {
+  return (
+    <main className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-md flex-col justify-center px-4 py-10">
+      <div className="mb-6 flex items-center gap-3">
+        <span className={`flex size-11 items-center justify-center rounded-xl text-white ${iconClassName}`}>
+          <HeaderIcon size={24} aria-hidden="true" />
+        </span>
+        <div>
+          <h1 className="text-xl font-semibold">{title}</h1>
+          <p className="text-sm text-slate-600">{subtitle}</p>
+        </div>
+      </div>
+      <form onSubmit={onSubmit} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        {children}
+      </form>
+      {after}
+    </main>
   )
 }
