@@ -1,7 +1,9 @@
 import { ValidationPipe } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
+import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { API_PREFIX, JSON_BODY_LIMIT } from './http.constants.js';
+import { requireCsrfHeader } from './require-csrf-header.js';
 
 /**
  * Applies the HTTP hardening shared by the real server and the e2e tests,
@@ -21,6 +23,8 @@ export function configureApp(app: NestExpressApplication): void {
     }),
   );
   app.useBodyParser('json', { limit: JSON_BODY_LIMIT });
+  app.use(cookieParser());
+  app.use(requireCsrfHeader);
   app.useGlobalPipes(
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
   );
