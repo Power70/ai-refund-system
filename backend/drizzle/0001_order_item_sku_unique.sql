@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "order_items_order_id_sku_unique" ON "order_items" USING btree ("order_id","sku");

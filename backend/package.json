@@ -22,7 +22,8 @@
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
     "policy:docs": "tsx scripts/generate-policy-docs.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx src/database/run-migrations.ts"
+    "db:migrate": "tsx src/database/run-migrations.ts",
+    "db:seed": "tsx src/database/seed/run-seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^12.0.1",

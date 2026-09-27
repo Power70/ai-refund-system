@@ -19,12 +19,13 @@ services:
       retries: 20
     # Not published to the host: only the API reaches the database.
 
-  # One-shot: applies pending SQL migrations, then exits. The API starts only after it succeeds.
+  # One-shot: applies pending SQL migrations and loads the demo data, then exits.
+  # The API starts only after it succeeds. Both steps are safe to repeat on every start.
   migrate:
     build:
       context: ./backend
       target: runtime
-    command: ["node", "dist/database/run-migrations.js"]
+    command: ["sh", "-c", "node dist/database/run-migrations.js && node dist/database/seed/run-seed.js"]
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER:-refund}:${POSTGRES_PASSWORD:-refund_demo_password}@db:5432/${POSTGRES_DB:-refund_support}
