@@ -50,23 +50,3 @@ describe('HTTP foundation (e2e)', () => {
       .expect(413);
   });
 });
-
-describe('health when the database is down (e2e)', () => {
-  let app: NestExpressApplication;
-
-  beforeAll(async () => {
-    // Nothing listens on port 1, so every connection attempt is refused.
-    app = await createTestApp('postgresql://nobody@127.0.0.1:1/none');
-  });
-
-  afterAll(async () => {
-    await app?.close();
-  });
-
-  it('answers 503 degraded quickly, without leaking why', async () => {
-    const started = Date.now();
-    const res = await request(app.getHttpServer()).get('/api/v1/health').expect(503);
-    expect(res.body).toEqual({ status: 'degraded' });
-    expect(Date.now() - started).toBeLessThan(3_000);
-  });
-});

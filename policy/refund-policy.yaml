@@ -1,6 +1,11 @@
 # Refund policy: the company's single source of truth.
 # The decision engine enforces exactly what is written here. To change the policy:
-# edit this file, bump `version`, make sure the policy tests pass, and restart the API.
+#   1. edit the rules below;
+#   2. give it a new `version` and set `effectiveFrom` to when it takes effect
+#      (later than the current version; use the current time to apply it now);
+#   3. in backend/: `npm run policy:docs` and `npm test` (the scenarios must still pass);
+#   4. restart the API. It registers the new version; decisions already made keep theirs.
+# The API refuses to start if the rules change but the version label doesn't.
 # Money is in minor units (cents): 50000 = $500.00.
 
 version: "2026.09-1"

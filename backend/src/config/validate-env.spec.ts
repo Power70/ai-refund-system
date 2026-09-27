@@ -4,7 +4,12 @@ const DATABASE_URL = 'postgresql://refund:secret@db:5432/refund_support';
 
 describe('validateEnv', () => {
   it('applies safe defaults for everything except the database', () => {
-    expect(validateEnv({ DATABASE_URL })).toEqual({ NODE_ENV: 'development', PORT: 3000, DATABASE_URL });
+    expect(validateEnv({ DATABASE_URL })).toEqual({
+      NODE_ENV: 'development',
+      PORT: 3000,
+      DATABASE_URL,
+      POLICY_FILE: '../policy/refund-policy.yaml',
+    });
   });
 
   it('coerces PORT from a string', () => {

@@ -12,6 +12,9 @@ export const envSchema = z.object({
   DATABASE_URL: z
     .string()
     .regex(/^postgres(ql)?:\/\/.+/, 'must be a postgres:// or postgresql:// connection string'),
+  // The company refund policy. Docker mounts ./policy read-only at /app/policy;
+  // the default suits running from backend/ in development.
+  POLICY_FILE: z.string().min(1).default('../policy/refund-policy.yaml'),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -42,6 +42,11 @@ services:
       NODE_ENV: production
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER:-refund}:${POSTGRES_PASSWORD:-refund_demo_password}@db:5432/${POSTGRES_DB:-refund_support}
+      POLICY_FILE: /app/policy/refund-policy.yaml
+    # The company refund policy, read-only. Edit policy/refund-policy.yaml, then
+    # `docker-compose restart api` registers the new version (no rebuild needed).
+    volumes:
+      - ./policy:/app/policy:ro
     depends_on:
       db:
         condition: service_healthy
