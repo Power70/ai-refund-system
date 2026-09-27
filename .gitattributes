@@ -1,0 +1,6 @@
+# Normalise line endings to LF so shell scripts and config files work inside
+# Linux containers even when the repo is cloned on Windows.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
