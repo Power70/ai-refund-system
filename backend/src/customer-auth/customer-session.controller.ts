@@ -1,13 +1,10 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, NotFoundException, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiCookieAuth, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiTags, ApiTooManyRequestsResponse, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
-import { LoginRateLimit } from '../common/rate-limit/rate-limit.decorators.js';
-import { CurrentCustomerId } from './current-customer-id.decorator.js';
-import { CustomerAuthGuard } from './customer-auth.guard.js';
+import { LoginRateLimit } from '../common/rate-limit.js';
+import { SessionResponseDto, StartSessionDto } from './customer-auth.dto.js';
+import { CurrentCustomerId, CustomerAuthGuard, SESSION_COOKIE, sessionCookieOptions } from './customer-auth.js';
 import { CustomerSessionService, SESSION_NOT_FOUND } from './customer-session.service.js';
-import { SessionResponseDto } from './dto/session-response.dto.js';
-import { StartSessionDto } from './dto/start-session.dto.js';
-import { SESSION_COOKIE, sessionCookieOptions } from './session-cookie.js';
 
 @ApiTags('customer session')
 @Controller('customer/session')

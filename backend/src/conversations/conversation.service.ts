@@ -1,26 +1,16 @@
 import { HttpException, HttpStatus, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { and, asc, eq, gte, sql } from 'drizzle-orm';
 import { LlmService } from '../ai/llm.service.js';
-import { DATABASE } from '../database/database.tokens.js';
-import type { Database } from '../database/database.types.js';
-import {
-  aiCalls,
-  conversationMessages,
-  conversations,
-  customers,
-  orderItems,
-  orders,
-  refundRequests,
-  type ConversationFlags,
-} from '../database/schema/index.js';
-import { loadItemQuantities } from '../orders/load-item-quantities.js';
-import { REASON_LABELS } from '../policy/refund-reasons.js';
-import { assistantTurnSchema, buildTurnPrompt, type ChatContext, type ContextOrder } from './assistant-turn.js';
+import { DATABASE, type Database } from '../database/database.js';
+import { aiCalls, conversationMessages, conversations, customers, orderItems, orders, refundRequests, type ConversationFlags } from '../database/schema.js';
+import { loadItemQuantities } from '../orders/item-quantities.js';
+import { REASON_LABELS } from '../policy/policy-schema.js';
+import { assistantTurnSchema, buildTurnPrompt, type ChatContext, type ContextOrder, sanitizeText, verifyTurn, type ProposalRecord, type QuickReply } from './chat-turn.js';
 import type { ConversationViewDto, SendMessageDto } from './conversations.dto.js';
-import { sanitizeText } from './text-checks.js';
-import { verifyTurn, type ProposalRecord, type QuickReply } from './verify-turn.js';
+import { answerFollowUp, loadDecisionBrief } from '../refunds/refund-messages.js';
 
 export const MAX_AI_TURNS = 6;
+export const MAX_FOLLOW_UPS = 10;
 export const MAX_FAILED_TURNS = 2;
 export const MAX_CONVERSATIONS_PER_DAY = 10;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -33,6 +23,8 @@ const MESSAGES = {
   manual: 'Please use the form below to choose the item, quantity and reason.',
   aiFailed: "Sorry, I didn't quite get that. Which item is this about, and what went wrong?",
   handover: "Let's fill this in directly. Choose the item, quantity and reason in the form below.",
+  stillProcessing: "We're still checking your request. The result will appear here shortly.",
+  followUpLimit: (requestId: string) => `For further questions, please contact our support team and quote your request ID ${requestId}.`,
 };
 
 export type ConversationErrorCode = 'CONVERSATION_LIMIT' | 'CONVERSATION_CLOSED' | 'MESSAGE_IN_PROGRESS' | 'INVALID_MESSAGE';
@@ -178,7 +170,7 @@ export class ConversationService {
         throw new ConversationException('MESSAGE_IN_PROGRESS', 'This message is still being answered.');
       }
 
-      if (conversation.state !== 'ACTIVE') throw new ConversationException('CONVERSATION_CLOSED', 'A claim was already submitted from this conversation. Start a new one for another issue.');
+      if (conversation.state === 'CLOSED') throw new ConversationException('CONVERSATION_CLOSED', 'This conversation is closed. Start a new one for another issue.');
       const now = new Date();
       if (conversation.pendingSince && now.getTime() - conversation.pendingSince.getTime() < PENDING_STALE_MS) {
         throw new ConversationException('MESSAGE_IN_PROGRESS', 'Please wait for the reply to your previous message.');
@@ -229,6 +221,7 @@ export class ConversationService {
       aiCall: null,
     });
 
+    if (conversation.state === 'SUBMITTED') return this.followUp(conversation, template);
     if (conversation.mode === 'MANUAL') return template(MESSAGES.manual);
     if (conversation.turnCount >= MAX_AI_TURNS) return template(MESSAGES.handover, { mode: 'MANUAL', handoverReason: 'TURN_LIMIT' });
 
@@ -278,6 +271,37 @@ export class ConversationService {
         outputTokens: result.outputTokens,
       },
     };
+  }
+
+  /** After submission the chat answers questions about the decision, grounded in stored facts. */
+  private async followUp(conversation: ConversationRow, template: (reply: string) => TurnOutcome): Promise<TurnOutcome> {
+    const [request] = await this.db
+      .select({ id: refundRequests.id, publicId: refundRequests.publicId, createdAt: refundRequests.createdAt })
+      .from(refundRequests)
+      .where(eq(refundRequests.conversationId, conversation.id));
+    if (!request) return template(MESSAGES.manual);
+
+    const brief = await loadDecisionBrief(this.db, request.id);
+    if (!brief) return template(MESSAGES.stillProcessing);
+
+    const questions = await this.db
+      .select({ content: conversationMessages.content })
+      .from(conversationMessages)
+      .where(
+        and(
+          eq(conversationMessages.conversationId, conversation.id),
+          eq(conversationMessages.role, 'CUSTOMER'),
+          gte(conversationMessages.createdAt, request.createdAt),
+        ),
+      )
+      .orderBy(asc(conversationMessages.createdAt));
+    if (questions.length > MAX_FOLLOW_UPS) return template(MESSAGES.followUpLimit(request.publicId));
+
+    const reply = await answerFollowUp(this.llm, brief, questions.at(-1)!.content);
+    const outcome = template(reply.text);
+    outcome.structured.replySource = reply.source;
+    outcome.aiCall = reply.call ? { ...reply.call, kind: 'FOLLOW_UP', requestId: request.id } : null;
+    return outcome;
   }
 
   private async loadContext(customerId: string, conversationId: string): Promise<ChatContext> {

@@ -1,11 +1,10 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Env } from '../config/env.schema.js';
+import type { Env } from '../config/env.js';
 import { CustomerAuthModule } from '../customer-auth/customer-auth.module.js';
-import { CustomerRefundRequestsController } from './submission/customer-refund-requests.controller.js';
-import { RefundSubmissionService } from './submission/refund-submission.service.js';
-import { RequestSweeperService } from './sweeper/request-sweeper.service.js';
-import { SWEEPER_INTERVAL_MS } from './sweeper/sweeper-interval.token.js';
+import { RefundSubmissionService } from './refund-submission.service.js';
+import { CustomerRefundRequestsController } from './refunds.controller.js';
+import { RequestSweeperService, SWEEPER_INTERVAL_MS } from './request-sweeper.js';
 
 @Module({
   imports: [CustomerAuthModule],

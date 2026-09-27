@@ -3,7 +3,7 @@ import pg from 'pg';
 import request from 'supertest';
 import { runMigrations } from '../src/database/run-migrations.js';
 import { createTestApp } from './create-test-app.js';
-import { createTestDatabase, type TestDatabase } from './support/test-database.js';
+import { createTestDatabase, type TestDatabase } from './support/test-app.js';
 
 /** Runs SQL on the test database's server as the same (admin-capable) user. */
 async function asAdmin(url: string, sql: string): Promise<number> {

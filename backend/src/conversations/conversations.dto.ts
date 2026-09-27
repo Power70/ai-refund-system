@@ -1,7 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsBoolean, IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
-import { REFUND_REASONS, type RefundReason } from '../policy/refund-reasons.js';
+import { REFUND_REASONS, type RefundReason } from '../policy/policy-schema.js';
 
 /** A typed message, or exactly one selection (item, reason chip or yes/no chip). */
 export class SendMessageDto {

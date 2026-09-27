@@ -1,8 +1,12 @@
 import { Controller, Get, HttpCode, HttpStatus, Res } from '@nestjs/common';
-import { ApiOkResponse, ApiServiceUnavailableResponse, ApiTags } from '@nestjs/swagger';
+import { ApiProperty, ApiOkResponse, ApiServiceUnavailableResponse, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
-import { DatabaseHealthService } from '../database/database-health.service.js';
-import { HealthResponseDto } from './health-response.dto.js';
+import { DatabaseHealthService } from '../database/database.js';
+
+export class HealthResponseDto {
+  @ApiProperty({ enum: ['ok', 'degraded'], example: 'ok' })
+  status: 'ok' | 'degraded';
+}
 
 /**
  * Public liveness/readiness endpoint. Reports only ok/degraded, never internal details;

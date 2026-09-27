@@ -3,17 +3,12 @@ import { asc, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type pg from 'pg';
 import request from 'supertest';
-import { createPgPool } from '../src/database/create-pg-pool.js';
-import type { Database } from '../src/database/database.types.js';
-import * as schema from '../src/database/schema/index.js';
-import { generatePublicRequestId } from '../src/refunds/generate-public-request-id.js';
-import { computePayloadHash } from '../src/refunds/submission/compute-payload-hash.js';
+import { createPgPool, type Database } from '../src/database/database.js';
+import * as schema from '../src/database/schema.js';
+import { generatePublicRequestId } from '../src/refunds/refund-requests.js';
+import { computePayloadHash } from '../src/refunds/refund-submission.service.js';
 import { createTestApp } from './create-test-app.js';
-import { customerClient } from './support/customer-client.js';
-import { demoOrder } from './support/demo-lookup.js';
-import { prepareDemoDatabase } from './support/prepare-demo-database.js';
-import { CSRF } from './support/sign-in.js';
-import type { TestDatabase } from './support/test-database.js';
+import { customerClient, demoOrder, prepareDemoDatabase, CSRF, type TestDatabase } from './support/test-app.js';
 
 describe('refund submission (e2e)', () => {
   let testDb: TestDatabase;

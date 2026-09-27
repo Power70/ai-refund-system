@@ -1,9 +1,7 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { createTestApp } from './create-test-app.js';
-import { prepareDemoDatabase } from './support/prepare-demo-database.js';
-import { asVisitor, CSRF, signIn } from './support/sign-in.js';
-import type { TestDatabase } from './support/test-database.js';
+import { prepareDemoDatabase, asVisitor, CSRF, signIn, type TestDatabase } from './support/test-app.js';
 
 const LOGIN = '/api/v1/customer/session';
 const NOT_FOUND = { statusCode: 404, message: "We couldn't find an order with those details.", error: 'Not Found' };

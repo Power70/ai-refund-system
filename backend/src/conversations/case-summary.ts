@@ -2,10 +2,9 @@ import { Logger } from '@nestjs/common';
 import { and, asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import type { LlmService } from '../ai/llm.service.js';
-import type { Database } from '../database/database.types.js';
-import { aiCalls, conversationMessages, decisions, orderItems, refundRequestLines, refundRequests } from '../database/schema/index.js';
-import { TRANSCRIPT_WINDOW } from './assistant-turn.js';
-import type { ProposalRecord } from './verify-turn.js';
+import type { Database } from '../database/database.js';
+import { aiCalls, conversationMessages, decisions, orderItems, refundRequestLines, refundRequests } from '../database/schema.js';
+import { TRANSCRIPT_WINDOW, type ProposalRecord } from './chat-turn.js';
 
 export const caseSummarySchema = z
   .object({

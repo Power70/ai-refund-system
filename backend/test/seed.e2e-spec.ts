@@ -1,13 +1,13 @@
 import { count, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type pg from 'pg';
-import { createPgPool } from '../src/database/create-pg-pool.js';
+import { createPgPool } from '../src/database/database.js';
 import { runMigrations } from '../src/database/run-migrations.js';
-import * as schema from '../src/database/schema/index.js';
-import { DEMO_CATALOG } from '../src/database/seed/demo-catalog.js';
-import { seedDemoCatalog } from '../src/database/seed/seed-demo-catalog.js';
-import { wholeDaysBetween } from '../src/policy/whole-days-between.js';
-import { createTestDatabase, type TestDatabase } from './support/test-database.js';
+import * as schema from '../src/database/schema.js';
+import { DEMO_CATALOG } from '../src/database/seed/demo-data.js';
+import { seedDemoCatalog } from '../src/database/seed/seed.js';
+import { wholeDaysBetween } from '../src/policy/policy-engine.js';
+import { createTestDatabase, type TestDatabase } from './support/test-app.js';
 
 const DAY_MS = 86_400_000;
 const expectedOrders = DEMO_CATALOG.flatMap((c) => c.orders).length;

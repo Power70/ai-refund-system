@@ -1,17 +1,17 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { ConfigModule } from '@nestjs/config';
 import { AdminModule } from './admin/admin.module.js';
 import { AiModule } from './ai/ai.module.js';
+import { throttlerOptions } from './common/rate-limit.js';
+import { validateEnv } from './config/env.js';
 import { ConversationsModule } from './conversations/conversations.module.js';
-import { throttlerOptions } from './common/rate-limit/throttler-options.js';
-import { validateEnv } from './config/validate-env.js';
 import { CustomerAuthModule } from './customer-auth/customer-auth.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
 import { OrdersModule } from './orders/orders.module.js';
-import { PolicyRegistryModule } from './policy/registry/policy-registry.module.js';
+import { PolicyRegistryModule } from './policy/policy-registry.module.js';
 import { RefundsModule } from './refunds/refunds.module.js';
 
 @Module({

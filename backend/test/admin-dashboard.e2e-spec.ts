@@ -1,9 +1,7 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { createTestApp } from './create-test-app.js';
-import { customerClient } from './support/customer-client.js';
-import { prepareDemoDatabase } from './support/prepare-demo-database.js';
-import type { TestDatabase } from './support/test-database.js';
+import { customerClient, prepareDemoDatabase, type TestDatabase } from './support/test-app.js';
 
 const ADMIN = { Authorization: 'Bearer admin-demo-token' };
 const QUEUE = '/api/v1/admin/refund-requests';

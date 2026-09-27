@@ -1,20 +1,14 @@
 import { asc, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type pg from 'pg';
-import { createPgPool } from '../src/database/create-pg-pool.js';
-import type { Database } from '../src/database/database.types.js';
-import { pgErrorCode } from '../src/database/pg-error-code.js';
-import * as schema from '../src/database/schema/index.js';
-import { SYSTEM_FAILURE_CUSTOMER_MESSAGE } from '../src/refunds/messages/system-failure-customer-message.js';
-import { decideRequest } from '../src/refunds/submission/decide-request.js';
-import { loadCustomerRequestView } from '../src/refunds/submission/load-customer-request-view.js';
-import { reclaimExpiredLease } from '../src/refunds/submission/reclaim-expired-lease.js';
-import { countStuckRequests } from '../src/refunds/sweeper/count-stuck-requests.js';
-import { sweepStuckRequests } from '../src/refunds/sweeper/sweep-stuck-requests.js';
+import { createPgPool, pgErrorCode, type Database } from '../src/database/database.js';
+import * as schema from '../src/database/schema.js';
+import { decideRequest } from '../src/refunds/decide-request.js';
+import { SYSTEM_FAILURE_CUSTOMER_MESSAGE } from '../src/refunds/refund-messages.js';
+import { loadCustomerRequestView, reclaimExpiredLease } from '../src/refunds/refund-requests.js';
+import { countStuckRequests, sweepStuckRequests } from '../src/refunds/request-sweeper.js';
 import { createTestApp } from './create-test-app.js';
-import { prepareDemoDatabase } from './support/prepare-demo-database.js';
-import { strandedRequest } from './support/stranded-request.js';
-import type { TestDatabase } from './support/test-database.js';
+import { prepareDemoDatabase, strandedRequest, type TestDatabase } from './support/test-app.js';
 
 const EXPIRED = () => new Date(Date.now() - 1_000);
 const LIVE = () => new Date(Date.now() + 60_000);

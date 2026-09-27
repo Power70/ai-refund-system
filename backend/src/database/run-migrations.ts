@@ -4,11 +4,11 @@
  *   node dist/database/run-migrations.js
  * Uses the runtime drizzle-orm migrator only, so no CLI tools are needed in the image.
  */
-import { fileURLToPath } from 'node:url';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import { validateEnv } from '../config/validate-env.js';
-import { createPgPool } from './create-pg-pool.js';
+import { fileURLToPath } from 'node:url';
+import { validateEnv } from '../config/env.js';
+import { createPgPool } from './database.js';
 
 export const MIGRATIONS_FOLDER = fileURLToPath(new URL('../../drizzle', import.meta.url));
 

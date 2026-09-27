@@ -4,15 +4,10 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import type pg from 'pg';
 import request from 'supertest';
 import { LlmError, type ToolCallRequest } from '../src/ai/llm.types.js';
-import { createPgPool } from '../src/database/create-pg-pool.js';
-import type { Database } from '../src/database/database.types.js';
-import * as schema from '../src/database/schema/index.js';
+import { createPgPool, type Database } from '../src/database/database.js';
+import * as schema from '../src/database/schema.js';
 import { createTestApp } from './create-test-app.js';
-import { customerClient } from './support/customer-client.js';
-import { FakeLlm, refFor, turn } from './support/fake-llm.js';
-import { prepareDemoDatabase } from './support/prepare-demo-database.js';
-import { CSRF } from './support/sign-in.js';
-import type { TestDatabase } from './support/test-database.js';
+import { customerClient, FakeLlm, refFor, turn, prepareDemoDatabase, CSRF, type TestDatabase } from './support/test-app.js';
 
 const BASE = '/api/v1/customer/conversations';
 const NO_FLAGS = { injectionAttempt: false, mentionsOtherCustomerOrder: false, abusive: false, offTopic: false };

@@ -1,17 +1,16 @@
+import { drizzle } from 'drizzle-orm/node-postgres';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import { stringify } from 'yaml';
 import { runMigrations } from '../src/database/run-migrations.js';
-import * as schema from '../src/database/schema/index.js';
-import { PolicyValidationError } from '../src/policy/policy-validation.error.js';
-import { NoActivePolicyError } from '../src/policy/registry/no-active-policy.error.js';
-import { PolicyRegistrationError } from '../src/policy/registry/policy-registration.error.js';
+import * as schema from '../src/database/schema.js';
+import { NoActivePolicyError, PolicyRegistrationError } from '../src/policy/policy-registry.js';
+import { PolicyValidationError } from '../src/policy/policy-schema.js';
 import { createTestApp } from './create-test-app.js';
-import { policyDocument } from './support/policy-document.fixture.js';
-import { createTestDatabase, type TestDatabase } from './support/test-database.js';
+import { policyDocument } from './support/policy-fixtures.js';
+import { createTestDatabase, type TestDatabase } from './support/test-app.js';
 
 const tempDir = mkdtempSync(join(tmpdir(), 'policy-'));
 function policyFile(name: string, content: string): string {

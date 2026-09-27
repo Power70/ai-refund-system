@@ -4,16 +4,11 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import type pg from 'pg';
 import request from 'supertest';
 import { LlmError, type ToolCallRequest } from '../src/ai/llm.types.js';
-import { createPgPool } from '../src/database/create-pg-pool.js';
-import type { Database } from '../src/database/database.types.js';
-import * as schema from '../src/database/schema/index.js';
-import type { RefundReason } from '../src/policy/refund-reasons.js';
+import { createPgPool, type Database } from '../src/database/database.js';
+import * as schema from '../src/database/schema.js';
+import type { RefundReason } from '../src/policy/policy-schema.js';
 import { createTestApp } from './create-test-app.js';
-import { customerClient } from './support/customer-client.js';
-import { FakeLlm, refFor, turn } from './support/fake-llm.js';
-import { prepareDemoDatabase } from './support/prepare-demo-database.js';
-import { CSRF } from './support/sign-in.js';
-import type { TestDatabase } from './support/test-database.js';
+import { customerClient, FakeLlm, refFor, turn, prepareDemoDatabase, CSRF, type TestDatabase } from './support/test-app.js';
 
 const CONVERSATIONS = '/api/v1/customer/conversations';
 const ADMIN = { Authorization: 'Bearer admin-demo-token' };
@@ -80,19 +75,22 @@ describe('submitting a claim from chat (e2e)', () => {
     const body = { orderNumber: 'WN-7K3P9Q', reason: 'DAMAGED', lines: [{ itemId: ada.itemId('Oxford shirt, blue'), quantity: 1 }], conversationId: chat };
     const key = crypto.randomUUID();
     const res = await ada.submit(body, key).expect(201);
-    expect(res.body).toMatchObject({ status: 'APPROVED', approvedAmountMinor: 4999 });
+    // The AI writes the message with placeholders; code fills in the real name and amount.
+    expect(res.body).toMatchObject({ status: 'APPROVED', approvedAmountMinor: 4999, customerMessage: 'Hi Ada, here is an update on your request. $49.99' });
 
     const { request: stored, decision } = await decisionOf(res.body.requestId);
     expect(stored).toMatchObject({ conversationId: chat, reasonOverridden: false, aiProposal: { reason: 'DAMAGED', confidence: 0.98 } });
     expect(decision.gateResult).toMatchObject({ assessment: 'AI', reasons: [] });
+    expect(decision.messageSource).toBe('AI');
     await new Promise((resolve) => setTimeout(resolve, 100));
     const brief = (await request(app.getHttpServer()).get(`/api/v1/admin/refund-requests/${res.body.requestId}`).set(ADMIN).expect(200)).body;
-    expect(brief.aiCalls.map((c: { kind: string }) => c.kind)).toEqual(['CHAT_TURN']);
+    expect(brief.aiCalls.map((c: { kind: string }) => c.kind)).toEqual(['CHAT_TURN', 'DECISION_REPLY']);
 
-    // The chat is now tied to the request and takes no further claims.
+    // The chat is now tied to the request: no further claims, but questions are answered.
     const view = (await ada.conversation(chat).expect(200)).body;
     expect(view).toMatchObject({ state: 'SUBMITTED', requestId: res.body.requestId });
-    expect((await ada.say(chat, 'one more thing').expect(409)).body.code).toBe('CONVERSATION_CLOSED');
+    const answer = (await ada.say(chat, 'When will I get the money?').expect(200)).body;
+    expect(answer.messages.at(-1).text).toBe('Hi Ada, happy to help with your request.');
     await ada.submit(body, key).expect(200);
     expect((await ada.submit(body).expect(409)).body.code).toBe('CONVERSATION_ALREADY_SUBMITTED');
   });
@@ -106,6 +104,7 @@ describe('submitting a claim from chat (e2e)', () => {
     const res = await kemi.submit({ orderNumber: 'WN-3VH9TL', reason: 'DAMAGED', lines: [{ itemId: kemi.itemId('Polo shirt, green'), quantity: 1 }], conversationId: chat }).expect(201);
     expect(res.body.status).toBe('ESCALATED');
     const { request: stored, decision } = await decisionOf(res.body.requestId);
+    expect(res.body.customerMessage).toBe('Hi Kemi, here is an update on your request. 2 business days');
     expect(stored.reasonOverridden).toBe(true);
     expect(decision.escalationReasons).toEqual(['REASON_OVERRIDDEN']);
 
@@ -125,7 +124,7 @@ describe('submitting a claim from chat (e2e)', () => {
     });
     expect(brief.aiSummary).toEqual(fake.summary);
     expect(brief.aiSummarySuppressed).toBe(false);
-    expect(brief.aiCalls.map((c: { kind: string; outcome: string }) => [c.kind, c.outcome])).toEqual([['CHAT_TURN', 'OK'], ['ADMIN_SUMMARY', 'OK']]);
+    expect(brief.aiCalls.map((c: { kind: string; outcome: string }) => [c.kind, c.outcome])).toEqual([['CHAT_TURN', 'OK'], ['DECISION_REPLY', 'OK'], ['ADMIN_SUMMARY', 'OK']]);
   });
 
   it('sends the claim to a person when it adds an item the chat never discussed', async () => {
@@ -193,6 +192,53 @@ describe('submitting a claim from chat (e2e)', () => {
 
     const res = await obi.submit({ orderNumber: 'WN-6TZ5DN', reason: 'DAMAGED', lines: [{ itemId: obi.itemId('Toaster, 2-slice'), quantity: 1 }], conversationId: chat }).expect(201);
     expect((await decisionOf(res.body.requestId)).decision.escalationReasons).toEqual(['AI_UNAVAILABLE']);
+  });
+
+  describe('messages after a decision', () => {
+    afterEach(() => {
+      fake.decisionMessage = null;
+      fake.followUpAnswer = null;
+    });
+
+    async function decidedChat(email: string, orderNumber: string, itemName: string, quote: string) {
+      const client = await customer(email, orderNumber);
+      const chat = await client.startChat();
+      fake.next(propose(itemName, { quote }));
+      await client.say(chat, `The item: ${quote}`).expect(200);
+      const res = await client.submit({ orderNumber, reason: 'DAMAGED', lines: [{ itemId: client.itemId(itemName), quantity: 1 }], conversationId: chat }).expect(201);
+      return { client, chat, res };
+    }
+
+    it('falls back to the template when the AI message breaks the rules', async () => {
+      fake.decisionMessage = 'Great news {{customer_first_name}}, you get $500 back, {{approved_amount}}!';
+      const { res } = await decidedChat('jide.afolabi@example.com', 'WN-K5R2BW', 'Bluetooth speaker, mini', 'speaker crackles');
+      const { decision } = await decisionOf(res.body.requestId);
+      expect(decision.messageSource).toBe('TEMPLATE');
+      expect(res.body.customerMessage).toMatch(/^Your request needs a review by our support team/);
+      const calls = await db.select().from(schema.aiCalls).where(eq(schema.aiCalls.requestId, decision.requestId));
+      const call = calls.find((c) => c.kind === 'DECISION_REPLY');
+      expect(call).toMatchObject({ kind: 'DECISION_REPLY', outcome: 'OK', failureReason: 'GUARD_REJECTED' });
+    });
+
+    it('answers disputes with how to reach support, and never promises to change the decision', async () => {
+      const { client, chat, res } = await decidedChat('efe.adebayo@example.com', 'WN-3RC7YB', 'Laptop sleeve 14"', 'sleeve zip is broken');
+
+      fake.followUpAnswer = { answer: 'This is unfair', isDispute: true };
+      const dispute = (await client.say(chat, 'This is unfair, I want my money').expect(200)).body;
+      expect(dispute.messages.at(-1).text).toBe(`I understand. If you believe this decision is wrong, please contact our support team and quote your request ID ${res.body.requestId}.`);
+
+      fake.followUpAnswer = { answer: "Don't worry {{customer_first_name}}, we will reconsider the decision.", isDispute: false };
+      const promise = (await client.say(chat, 'Can you look again?').expect(200)).body;
+      expect(promise.messages.at(-1).text).not.toMatch(/reconsider/);
+      expect(promise.messages.at(-1).text).toContain(res.body.requestId);
+    });
+
+    it('stops answering after 10 follow-up questions', async () => {
+      const { client, chat, res } = await decidedChat('ifeoma.nwosu@example.com', 'WN-6PQ8XE', 'Soy candle, vanilla', 'candle arrived cracked');
+      for (let i = 0; i < 10; i++) await client.say(chat, `question ${i}`).expect(200);
+      const last = (await client.say(chat, 'one more question').expect(200)).body;
+      expect(last.messages.at(-1).text).toBe(`For further questions, please contact our support team and quote your request ID ${res.body.requestId}.`);
+    });
   });
 
   it("refuses another customer's conversation", async () => {

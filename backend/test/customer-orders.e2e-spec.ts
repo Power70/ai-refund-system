@@ -2,14 +2,11 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import request from 'supertest';
-import { createPgPool } from '../src/database/create-pg-pool.js';
-import * as schema from '../src/database/schema/index.js';
-import { generatePublicRequestId } from '../src/refunds/generate-public-request-id.js';
+import { createPgPool } from '../src/database/database.js';
+import * as schema from '../src/database/schema.js';
+import { generatePublicRequestId } from '../src/refunds/refund-requests.js';
 import { createTestApp } from './create-test-app.js';
-import { demoOrder } from './support/demo-lookup.js';
-import { prepareDemoDatabase } from './support/prepare-demo-database.js';
-import { signIn } from './support/sign-in.js';
-import type { TestDatabase } from './support/test-database.js';
+import { demoOrder, prepareDemoDatabase, signIn, type TestDatabase } from './support/test-app.js';
 
 const ORDERS = '/api/v1/customer/orders';
 

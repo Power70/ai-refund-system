@@ -1,12 +1,8 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
-import { DATABASE } from '../database/database.tokens.js';
-import type { Database } from '../database/database.types.js';
-import { FailedLoginLimiter } from './failed-login-limiter.js';
-import { customers, orders } from '../database/schema/index.js';
-import { SESSION_TTL_SECONDS } from './session-cookie.js';
-import { SESSION_SECRET } from './session-secret.provider.js';
-import { signSessionToken } from './session-token.js';
+import { DATABASE, type Database } from '../database/database.js';
+import { customers, orders } from '../database/schema.js';
+import { FailedLoginLimiter, SESSION_TTL_SECONDS, SESSION_SECRET, signSessionToken } from './customer-auth.js';
 
 /** One message for every failure, so responses never reveal whether an email or an order exists. */
 export const SESSION_NOT_FOUND = "We couldn't find an order with those details.";

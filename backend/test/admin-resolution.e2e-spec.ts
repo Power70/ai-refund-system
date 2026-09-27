@@ -2,15 +2,10 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type pg from 'pg';
 import request from 'supertest';
-import { createPgPool } from '../src/database/create-pg-pool.js';
-import type { Database } from '../src/database/database.types.js';
-import * as schema from '../src/database/schema/index.js';
+import { createPgPool, type Database } from '../src/database/database.js';
+import * as schema from '../src/database/schema.js';
 import { createTestApp } from './create-test-app.js';
-import { customerClient } from './support/customer-client.js';
-import { prepareDemoDatabase } from './support/prepare-demo-database.js';
-import { CSRF } from './support/sign-in.js';
-import { strandedRequest } from './support/stranded-request.js';
-import type { TestDatabase } from './support/test-database.js';
+import { customerClient, prepareDemoDatabase, CSRF, strandedRequest, type TestDatabase } from './support/test-app.js';
 
 const ADMIN = { Authorization: 'Bearer admin-demo-token' };
 const BASE = '/api/v1/admin/refund-requests';

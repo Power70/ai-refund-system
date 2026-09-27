@@ -2,7 +2,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { runMigrations } from '../src/database/run-migrations.js';
 import { createTestApp } from './create-test-app.js';
-import { createTestDatabase, type TestDatabase } from './support/test-database.js';
+import { createTestDatabase, type TestDatabase } from './support/test-app.js';
 
 describe('HTTP foundation (e2e)', () => {
   let app: NestExpressApplication;

@@ -1,15 +1,12 @@
 import { count, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type pg from 'pg';
-import { createPgPool } from '../src/database/create-pg-pool.js';
-import type { Database } from '../src/database/database.types.js';
+import { createPgPool, type Database } from '../src/database/database.js';
 import { runMigrations } from '../src/database/run-migrations.js';
-import * as schema from '../src/database/schema/index.js';
-import { findActivePolicy } from '../src/policy/registry/find-active-policy.js';
-import { NoActivePolicyError } from '../src/policy/registry/no-active-policy.error.js';
-import { registerPolicyVersion } from '../src/policy/registry/register-policy-version.js';
-import { policyDocument } from './support/policy-document.fixture.js';
-import { createTestDatabase, type TestDatabase } from './support/test-database.js';
+import * as schema from '../src/database/schema.js';
+import { findActivePolicy, NoActivePolicyError, registerPolicyVersion } from '../src/policy/policy-registry.js';
+import { policyDocument } from './support/policy-fixtures.js';
+import { createTestDatabase, type TestDatabase } from './support/test-app.js';
 
 describe('policy registry (e2e, real PostgreSQL)', () => {
   let testDb: TestDatabase;

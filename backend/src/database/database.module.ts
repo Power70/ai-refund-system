@@ -2,11 +2,9 @@ import { Global, Inject, Module, type OnApplicationShutdown } from '@nestjs/comm
 import { ConfigService } from '@nestjs/config';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type pg from 'pg';
-import type { Env } from '../config/env.schema.js';
-import { createPgPool } from './create-pg-pool.js';
-import { DatabaseHealthService } from './database-health.service.js';
-import { DATABASE, PG_POOL } from './database.tokens.js';
-import * as schema from './schema/index.js';
+import type { Env } from '../config/env.js';
+import { createPgPool, DatabaseHealthService, DATABASE, PG_POOL } from './database.js';
+import * as schema from './schema.js';
 
 @Global()
 @Module({

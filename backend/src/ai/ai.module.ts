@@ -1,10 +1,9 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { Env } from '../config/env.schema.js';
-import { AnthropicAdapter } from './anthropic.adapter.js';
+import type { Env } from '../config/env.js';
+import { AnthropicAdapter, OpenAiCompatibleAdapter } from './llm-adapters.js';
 import { resolveLlmConfig, type LlmConfigResult } from './llm-providers.js';
 import { LLM_ADAPTER, LLM_CONFIG, LlmService } from './llm.service.js';
-import { OpenAiCompatibleAdapter } from './openai-compatible.adapter.js';
 
 @Global()
 @Module({

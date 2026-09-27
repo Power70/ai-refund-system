@@ -1,14 +1,13 @@
-import { Test } from '@nestjs/testing';
 import type { NestExpressApplication } from '@nestjs/platform-express';
-import { LLM_ADAPTER, LLM_CONFIG } from '../src/ai/llm.service.js';
+import { Test } from '@nestjs/testing';
 import type { LlmConfigResult } from '../src/ai/llm-providers.js';
+import { LLM_ADAPTER, LLM_CONFIG } from '../src/ai/llm.service.js';
 import type { LlmAdapter } from '../src/ai/llm.types.js';
 import { AppModule } from '../src/app.module.js';
-import { configureApp } from '../src/common/configure-app.js';
-import { createPgPool } from '../src/database/create-pg-pool.js';
-import { PG_POOL } from '../src/database/database.tokens.js';
-import { POLICY_FILE_PATH } from '../src/policy/registry/policy-file-path.token.js';
-import { SWEEPER_INTERVAL_MS } from '../src/refunds/sweeper/sweeper-interval.token.js';
+import { configureApp } from '../src/common/http.js';
+import { createPgPool, PG_POOL } from '../src/database/database.js';
+import { POLICY_FILE_PATH } from '../src/policy/policy-registry.js';
+import { SWEEPER_INTERVAL_MS } from '../src/refunds/request-sweeper.js';
 
 export interface TestAppOptions {
   /** Defaults to the real policy/refund-policy.yaml. */

@@ -2,9 +2,8 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module.js';
-import { configureApp } from './common/configure-app.js';
-import { setupSwagger } from './common/setup-swagger.js';
-import type { Env } from './config/env.schema.js';
+import { configureApp, setupSwagger } from './common/http.js';
+import type { Env } from './config/env.js';
 
 async function bootstrap(): Promise<void> {
   // Body parsing is registered explicitly in configureApp with a size limit.

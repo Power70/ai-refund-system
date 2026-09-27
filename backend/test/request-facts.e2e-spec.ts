@@ -1,18 +1,15 @@
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type pg from 'pg';
-import { createPgPool } from '../src/database/create-pg-pool.js';
-import type { Database } from '../src/database/database.types.js';
+import { createPgPool, type Database } from '../src/database/database.js';
 import { runMigrations } from '../src/database/run-migrations.js';
-import * as schema from '../src/database/schema/index.js';
-import { seedDemoCatalog } from '../src/database/seed/seed-demo-catalog.js';
-import { registerPolicyVersion } from '../src/policy/registry/register-policy-version.js';
-import { buildRequestFacts } from '../src/refunds/facts/build-request-facts.js';
-import { ItemNotInOrderError } from '../src/refunds/facts/item-not-in-order.error.js';
-import { generatePublicRequestId } from '../src/refunds/generate-public-request-id.js';
-import { policyDocument } from './support/policy-document.fixture.js';
-import { demoOrder } from './support/demo-lookup.js';
-import { createTestDatabase, type TestDatabase } from './support/test-database.js';
+import * as schema from '../src/database/schema.js';
+import { seedDemoCatalog } from '../src/database/seed/seed.js';
+import { registerPolicyVersion } from '../src/policy/policy-registry.js';
+import { buildRequestFacts, ItemNotInOrderError } from '../src/refunds/refund-facts.js';
+import { generatePublicRequestId } from '../src/refunds/refund-requests.js';
+import { policyDocument } from './support/policy-fixtures.js';
+import { demoOrder, createTestDatabase, type TestDatabase } from './support/test-app.js';
 
 const DAY_MS = 86_400_000;
 

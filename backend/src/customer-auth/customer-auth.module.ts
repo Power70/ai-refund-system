@@ -1,9 +1,7 @@
 import { Module } from '@nestjs/common';
-import { CustomerAuthGuard } from './customer-auth.guard.js';
+import { CustomerAuthGuard, FailedLoginLimiter, sessionSecretProvider } from './customer-auth.js';
 import { CustomerSessionController } from './customer-session.controller.js';
 import { CustomerSessionService } from './customer-session.service.js';
-import { FailedLoginLimiter } from './failed-login-limiter.js';
-import { sessionSecretProvider } from './session-secret.provider.js';
 
 @Module({
   controllers: [CustomerSessionController],

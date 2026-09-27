@@ -1,11 +1,10 @@
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type pg from 'pg';
-import { createPgPool } from '../src/database/create-pg-pool.js';
-import { pgErrorCode } from '../src/database/pg-error-code.js';
+import { createPgPool, pgErrorCode } from '../src/database/database.js';
 import { runMigrations } from '../src/database/run-migrations.js';
-import * as schema from '../src/database/schema/index.js';
-import { createTestDatabase, type TestDatabase } from './support/test-database.js';
+import * as schema from '../src/database/schema.js';
+import { createTestDatabase, type TestDatabase } from './support/test-app.js';
 
 const CHECK_VIOLATION = '23514';
 const UNIQUE_VIOLATION = '23505';

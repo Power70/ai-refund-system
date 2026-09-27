@@ -3,18 +3,16 @@
  *   node dist/database/seed/run-seed.js
  * Order matters: catalog → register the refund policy → history decided under that policy.
  */
+import { drizzle } from 'drizzle-orm/node-postgres';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { validateEnv } from '../../config/validate-env.js';
-import { parsePolicy } from '../../policy/parse-policy.js';
-import { findActivePolicy } from '../../policy/registry/find-active-policy.js';
-import { registerPolicyVersion } from '../../policy/registry/register-policy-version.js';
-import { createPgPool } from '../create-pg-pool.js';
-import * as schema from '../schema/index.js';
-import { seedDemoCatalog } from './seed-demo-catalog.js';
-import { seedDemoHistory } from './seed-demo-history.js';
+import { validateEnv } from '../../config/env.js';
+import { findActivePolicy, registerPolicyVersion } from '../../policy/policy-registry.js';
+import { parsePolicy } from '../../policy/policy-schema.js';
+import { createPgPool } from '../database.js';
+import * as schema from '../schema.js';
+import { seedDemoCatalog, seedDemoHistory } from './seed.js';
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const { DATABASE_URL, POLICY_FILE } = validateEnv(process.env);

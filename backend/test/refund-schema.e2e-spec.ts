@@ -1,16 +1,14 @@
 import { eq, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type pg from 'pg';
-import { createPgPool } from '../src/database/create-pg-pool.js';
-import type { Database } from '../src/database/database.types.js';
-import { pgErrorCode } from '../src/database/pg-error-code.js';
+import { createPgPool, pgErrorCode, type Database } from '../src/database/database.js';
 import { runMigrations } from '../src/database/run-migrations.js';
-import * as schema from '../src/database/schema/index.js';
-import { seedDemoCatalog } from '../src/database/seed/seed-demo-catalog.js';
-import { registerPolicyVersion } from '../src/policy/registry/register-policy-version.js';
-import { generatePublicRequestId } from '../src/refunds/generate-public-request-id.js';
-import { policyDocument } from './support/policy-document.fixture.js';
-import { createTestDatabase, type TestDatabase } from './support/test-database.js';
+import * as schema from '../src/database/schema.js';
+import { seedDemoCatalog } from '../src/database/seed/seed.js';
+import { registerPolicyVersion } from '../src/policy/policy-registry.js';
+import { generatePublicRequestId } from '../src/refunds/refund-requests.js';
+import { policyDocument } from './support/policy-fixtures.js';
+import { createTestDatabase, type TestDatabase } from './support/test-app.js';
 
 const CHECK = '23514';
 const UNIQUE = '23505';

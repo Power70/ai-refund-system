@@ -1,9 +1,7 @@
 import { Body, Controller, Get, HttpCode, NotFoundException, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 import { ApiConflictResponse, ApiCookieAuth, ApiCreatedResponse, ApiNotFoundResponse, ApiOkResponse, ApiTags, ApiTooManyRequestsResponse } from '@nestjs/swagger';
-import { ChatRateLimit } from '../common/rate-limit/rate-limit.decorators.js';
-import { CurrentCustomerId } from '../customer-auth/current-customer-id.decorator.js';
-import { CustomerAuthGuard } from '../customer-auth/customer-auth.guard.js';
-import { SESSION_COOKIE } from '../customer-auth/session-cookie.js';
+import { ChatRateLimit } from '../common/rate-limit.js';
+import { CurrentCustomerId, CustomerAuthGuard, SESSION_COOKIE } from '../customer-auth/customer-auth.js';
 import { ConversationService } from './conversation.service.js';
 import { ConversationViewDto, SendMessageDto } from './conversations.dto.js';
 

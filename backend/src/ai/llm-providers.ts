@@ -1,4 +1,4 @@
-import type { Env } from '../config/env.schema.js';
+import type { Env } from '../config/env.js';
 import type { LlmConfig, ProviderId, Protocol } from './llm.types.js';
 
 interface ProviderDefaults {

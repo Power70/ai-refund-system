@@ -46,4 +46,4 @@ End-to-end tests connect to `postgresql://refund:refund_demo_password@127.0.0.1:
 docker run --rm -d -p 5432:5432 -e POSTGRES_USER=refund -e POSTGRES_PASSWORD=refund_demo_password postgres:16-alpine
 ```
 
-Database changes: edit `backend/src/database/schema/`, then `npm run db:generate` writes a new SQL migration to `backend/drizzle/`.
+Database changes: edit `backend/src/database/schema.ts`, then `npm run db:generate` writes a new SQL migration to `backend/drizzle/`.
