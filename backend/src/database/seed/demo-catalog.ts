@@ -75,7 +75,7 @@ export const DEMO_CATALOG: readonly DemoCustomer[] = [
     orders: [
       { orderNumber: 'WN-6PQ8XE', deliveredDaysAgo: 6, items: [{ sku: 'CANDLE-SOY-VAN', name: 'Soy candle, vanilla', category: 'home', unitPricePaidMinor: 3000, quantity: 1 }] },
       { orderNumber: 'WN-1YD4GU', deliveredDaysAgo: 15, items: [{ sku: 'TOWEL-BTH-SET', name: 'Bath towel set', category: 'home', unitPricePaidMinor: 4500, quantity: 1 }] },
-      { orderNumber: 'WN-9MA3CJ', deliveredDaysAgo: 22, items: [{ sku: 'PILLOW-MEM-STD', name: 'Memory foam pillow', category: 'home', unitPricePaidMinor: 3800, quantity: 2 }] },
+      { orderNumber: 'WN-9MA3CJ', deliveredDaysAgo: 22, items: [{ sku: 'PILLOW-MEM-STD', name: 'Memory foam pillow', category: 'home', unitPricePaidMinor: 3800, quantity: 3 }] },
     ],
   },
   {

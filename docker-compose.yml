@@ -29,6 +29,10 @@ services:
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://${POSTGRES_USER:-refund}:${POSTGRES_PASSWORD:-refund_demo_password}@db:5432/${POSTGRES_DB:-refund_support}
+      # The demo history is decided under the refund policy, so seeding registers it first.
+      POLICY_FILE: /app/policy/refund-policy.yaml
+    volumes:
+      - ./policy:/app/policy:ro
     depends_on:
       db:
         condition: service_healthy
