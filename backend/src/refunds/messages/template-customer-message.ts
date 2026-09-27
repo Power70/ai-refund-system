@@ -1,13 +1,18 @@
-import type { RequestEvaluation } from '../../policy/policy-evaluation.types.js';
+import type { LineEvaluation, PolicyStatus } from '../../policy/policy-evaluation.types.js';
 
 /**
  * Plain, policy-worded message used when no AI reply is available (and for seeded history).
- * Uses only the policy's own customer-facing reasons, so it can never state anything
- * the rules didn't decide.
+ * Uses only the policy's own customer-facing reasons, so it can never state anything the
+ * rules didn't decide. Escalations never reveal why (no fraud signals, no thresholds).
+ * `status` is the final status, after the safety gate.
  */
-export function templateCustomerMessage(evaluation: RequestEvaluation, reviewEtaBusinessDays: number): string {
-  const reasons = [...new Set(evaluation.lines.map((l) => l.publicReason))];
-  switch (evaluation.status) {
+export function templateCustomerMessage(
+  status: PolicyStatus,
+  lines: readonly Pick<LineEvaluation, 'publicReason'>[],
+  reviewEtaBusinessDays: number,
+): string {
+  const reasons = [...new Set(lines.map((l) => l.publicReason))];
+  switch (status) {
     case 'APPROVED':
       return `Your refund has been approved. ${reasons.join(' ')}`.trim();
     case 'DENIED':

@@ -17,6 +17,9 @@ export const envSchema = z.object({
   POLICY_FILE: z.string().min(1).default('../policy/refund-policy.yaml'),
   // Signs customer session cookies. Optional: when unset (or empty) a random secret is generated
   // at startup, so no guessable default ever ships in the public repo; sessions then reset on restart.
+  // An automatic approval also needs the AI's self-reported confidence at or above this.
+  // It can only add escalations; it is never the sole check (see the safety gate).
+  AI_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.95),
   SESSION_SECRET: z.preprocess(
     (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
     z.string().min(32, 'must be at least 32 characters').optional(),

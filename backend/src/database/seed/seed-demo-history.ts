@@ -113,7 +113,7 @@ async function create(tx: Database, policy: RegisteredPolicy, entry: DemoHistory
     policyVersionId: policy.id,
     ruleTrace: evaluation,
     escalationReasons: evaluation.escalationRuleIds,
-    customerMessage: templateCustomerMessage(evaluation, policy.document.reviewEtaBusinessDays),
+    customerMessage: templateCustomerMessage(evaluation.status, evaluation.lines, policy.document.reviewEtaBusinessDays),
     messageSource: 'TEMPLATE',
     createdAt: at,
   });

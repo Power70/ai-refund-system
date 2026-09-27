@@ -9,6 +9,7 @@ describe('validateEnv', () => {
       PORT: 3000,
       DATABASE_URL,
       POLICY_FILE: '../policy/refund-policy.yaml',
+      AI_MIN_CONFIDENCE: 0.95,
     });
   });
 

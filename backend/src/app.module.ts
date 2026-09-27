@@ -9,6 +9,7 @@ import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
 import { OrdersModule } from './orders/orders.module.js';
 import { PolicyRegistryModule } from './policy/registry/policy-registry.module.js';
+import { RefundsModule } from './refunds/refunds.module.js';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { PolicyRegistryModule } from './policy/registry/policy-registry.module.j
     PolicyRegistryModule,
     CustomerAuthModule,
     OrdersModule,
+    RefundsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

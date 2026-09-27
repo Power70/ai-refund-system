@@ -20,3 +20,11 @@ describe('finalLineStatuses', () => {
     expect([...finalLineStatuses(evaluation('ESCALATED', ['ALLOW', 'REVIEW', 'DENY'])).values()]).toEqual(['UNDER_REVIEW', 'UNDER_REVIEW', 'UNDER_REVIEW']);
   });
 });
+
+describe('finalLineStatuses after the safety gate', () => {
+  it('holds every line for review when the gate escalated a policy approval', () => {
+    const e = { policyVersion: 'v', status: 'APPROVED', approvedAmountMinor: 1, requestRulesEvaluated: true, requestFacts: null, requestTrace: [], requestDecidingRuleId: null, escalationRuleIds: [],
+      lines: [{ lineId: 'a', amountMinor: 1, facts: {}, outcome: 'ALLOW', decidingRuleId: null, publicReason: '', trace: [] }] } as const;
+    expect([...finalLineStatuses(e as never, 'ESCALATED').values()]).toEqual(['UNDER_REVIEW']);
+  });
+});
