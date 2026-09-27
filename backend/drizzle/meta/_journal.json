@@ -43,6 +43,13 @@
       "when": 1790544748494,
       "tag": "0005_conversations",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1790547576988,
+      "tag": "0006_link_requests_to_conversations",
+      "breakpoints": true
     }
   ]
 }

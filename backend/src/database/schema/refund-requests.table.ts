@@ -1,5 +1,7 @@
 import { sql } from 'drizzle-orm';
 import { boolean, check, foreignKey, index, integer, jsonb, pgTable, text, timestamp, unique, uuid } from 'drizzle-orm/pg-core';
+import type { ClaimContext } from '../../refunds/submission/assessment-for-request.js';
+import { conversations } from './conversations.table.js';
 import { customers } from './customers.table.js';
 import { orders } from './orders.table.js';
 import { policyVersions } from './policy-versions.table.js';
@@ -26,6 +28,12 @@ export const refundRequests = pgTable(
     reasonConfirmed: refundReasonEnum('reason_confirmed').notNull(),
     // What the AI understood before the customer confirmed (null for manual claims).
     aiProposal: jsonb('ai_proposal'),
+    // The chat the claim came from; one conversation produces at most one request.
+    conversationId: uuid('conversation_id')
+      .unique()
+      .references(() => conversations.id, { onDelete: 'restrict' }),
+    // Snapshot taken at submission so retries and the sweeper decide identically.
+    claimContext: jsonb('claim_context').$type<ClaimContext>(),
     // True when the customer changed the reason the AI proposed (sent to human review).
     reasonOverridden: boolean('reason_overridden').notNull().default(false),
     source: requestSourceEnum('source').notNull().default('CUSTOMER'),

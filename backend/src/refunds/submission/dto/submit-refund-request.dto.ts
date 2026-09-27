@@ -1,6 +1,6 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { ArrayMaxSize, ArrayMinSize, IsIn, IsInt, IsUUID, Matches, Max, Min, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsIn, IsInt, IsOptional, IsUUID, Matches, Max, Min, ValidateNested } from 'class-validator';
 import { REFUND_REASONS, type RefundReason } from '../../../policy/refund-reasons.js';
 import { ArrayUniqueBy } from './array-unique-by.validator.js';
 
@@ -34,4 +34,9 @@ export class SubmitRefundRequestDto {
   @ArrayMaxSize(20)
   @ArrayUniqueBy('itemId', { message: 'each item may appear only once' })
   lines: RequestedLineDto[];
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'The chat this claim was confirmed in; omit for a claim filled in without chat' })
+  @IsOptional()
+  @IsUUID()
+  conversationId?: string;
 }

@@ -7,7 +7,8 @@ export type RefundRequestErrorCode =
   | 'ALREADY_IN_PROGRESS'
   | 'NOTHING_LEFT_TO_REFUND'
   | 'QUANTITY_TOO_HIGH'
-  | 'NO_ACTIVE_POLICY';
+  | 'NO_ACTIVE_POLICY'
+  | 'CONVERSATION_ALREADY_SUBMITTED';
 
 const STATUS: Record<RefundRequestErrorCode, HttpStatus> = {
   IDEMPOTENCY_KEY_REQUIRED: HttpStatus.BAD_REQUEST,
@@ -17,6 +18,7 @@ const STATUS: Record<RefundRequestErrorCode, HttpStatus> = {
   NOTHING_LEFT_TO_REFUND: HttpStatus.UNPROCESSABLE_ENTITY,
   QUANTITY_TOO_HIGH: HttpStatus.UNPROCESSABLE_ENTITY,
   NO_ACTIVE_POLICY: HttpStatus.SERVICE_UNAVAILABLE,
+  CONVERSATION_ALREADY_SUBMITTED: HttpStatus.CONFLICT,
 };
 
 /** A refund request error with a stable code the frontend can act on, and a plain message. */

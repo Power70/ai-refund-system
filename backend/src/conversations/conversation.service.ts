@@ -10,6 +10,7 @@ import {
   customers,
   orderItems,
   orders,
+  refundRequests,
   type ConversationFlags,
 } from '../database/schema/index.js';
 import { loadItemQuantities } from '../orders/load-item-quantities.js';
@@ -86,7 +87,7 @@ export class ConversationService {
     const mode = this.llm.enabled ? 'AI' : 'MANUAL';
 
     const id = await this.db.transaction(async (tx) => {
-      const [conversation] = await tx.insert(conversations).values({ customerId, mode, createdAt: now, updatedAt: now }).returning({ id: conversations.id });
+      const [conversation] = await tx.insert(conversations).values({ customerId, mode, handoverReason: mode === 'MANUAL' ? 'AI_DISABLED' : null, createdAt: now, updatedAt: now }).returning({ id: conversations.id });
       const structured: AssistantStructured = { replyTo: null, quickReplies: [], replySource: 'TEMPLATE' };
       const greeting = mode === 'AI' ? MESSAGES.greetingAi(firstName) : MESSAGES.greetingManual(firstName);
       await tx.insert(conversationMessages).values({ conversationId: conversation.id, role: 'ASSISTANT', content: greeting, structured, createdAt: now });
@@ -97,11 +98,13 @@ export class ConversationService {
 
   /** The customer's conversation, or null (also for another customer's). */
   async view(customerId: string, conversationId: string): Promise<ConversationViewDto | null> {
-    const [conversation] = await this.db
-      .select()
+    const [row] = await this.db
+      .select({ conversation: conversations, requestId: refundRequests.publicId })
       .from(conversations)
+      .leftJoin(refundRequests, eq(refundRequests.conversationId, conversations.id))
       .where(and(eq(conversations.id, conversationId), eq(conversations.customerId, customerId)));
-    if (!conversation) return null;
+    if (!row) return null;
+    const { conversation } = row;
 
     const messages = await this.db
       .select()
@@ -115,6 +118,7 @@ export class ConversationService {
       conversationId: conversation.id,
       state: conversation.state,
       mode: conversation.mode,
+      requestId: row.requestId,
       messages: messages.map((m) => ({ id: m.id, role: m.role, text: m.content, createdAt: m.createdAt.toISOString() })),
       quickReplies: conversation.mode === 'AI' ? ((lastAssistant?.structured as AssistantStructured | null)?.quickReplies ?? []) : [],
       proposal: proposal ? { orderId: proposal.orderId, orderNumber: proposal.orderNumber, reason: proposal.reason, lines: proposal.lines } : null,
@@ -174,7 +178,7 @@ export class ConversationService {
         throw new ConversationException('MESSAGE_IN_PROGRESS', 'This message is still being answered.');
       }
 
-      if (conversation.state !== 'ACTIVE') throw new ConversationException('CONVERSATION_CLOSED', 'This conversation is closed. Start a new one for another issue.');
+      if (conversation.state !== 'ACTIVE') throw new ConversationException('CONVERSATION_CLOSED', 'A claim was already submitted from this conversation. Start a new one for another issue.');
       const now = new Date();
       if (conversation.pendingSince && now.getTime() - conversation.pendingSince.getTime() < PENDING_STALE_MS) {
         throw new ConversationException('MESSAGE_IN_PROGRESS', 'Please wait for the reply to your previous message.');
@@ -226,7 +230,7 @@ export class ConversationService {
     });
 
     if (conversation.mode === 'MANUAL') return template(MESSAGES.manual);
-    if (conversation.turnCount >= MAX_AI_TURNS) return template(MESSAGES.handover, { mode: 'MANUAL' });
+    if (conversation.turnCount >= MAX_AI_TURNS) return template(MESSAGES.handover, { mode: 'MANUAL', handoverReason: 'TURN_LIMIT' });
 
     const context = await this.loadContext(customerId, conversation.id);
     const { system, user } = buildTurnPrompt(context);
@@ -247,7 +251,7 @@ export class ConversationService {
       const outcome = template(handover ? MESSAGES.handover : MESSAGES.aiFailed, {
         failedTurns,
         turnCount: conversation.turnCount + 1,
-        ...(handover ? { mode: 'MANUAL' as const } : {}),
+        ...(handover ? { mode: 'MANUAL' as const, handoverReason: result.reason === 'disabled' ? 'AI_DISABLED' : 'AI_FAILED' } : {}),
       });
       outcome.aiCall = { ...call, outcome: aiOutcome(result.reason), failureReason: result.reason };
       return outcome;

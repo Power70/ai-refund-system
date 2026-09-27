@@ -1,10 +1,12 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, gte, inArray, ne, or, sql } from 'drizzle-orm';
 import type { Database } from '../../database/database.types.js';
-import { auditEvents, orderItems, orders, refundRequestLines, refundRequests } from '../../database/schema/index.js';
+import { auditEvents, conversations, orderItems, orders, refundRequestLines, refundRequests } from '../../database/schema/index.js';
 import { loadItemQuantities } from '../../orders/load-item-quantities.js';
 import { findActivePolicy } from '../../policy/registry/find-active-policy.js';
 import { NoActivePolicyError } from '../../policy/registry/no-active-policy.error.js';
 import { generatePublicRequestId } from '../generate-public-request-id.js';
+import type { ProposalRecord } from '../../conversations/verify-turn.js';
+import type { ClaimContext } from './assessment-for-request.js';
 import type { SubmitRefundRequestDto } from './dto/submit-refund-request.dto.js';
 import { IdempotentReplaySignal } from './idempotent-replay.signal.js';
 import { newLease } from './new-lease.js';
@@ -53,6 +55,8 @@ export async function reserveRequest(
       .where(and(eq(refundRequests.customerId, customerId), eq(refundRequests.idempotencyKey, idempotencyKey)));
     if (sameKey) throw new IdempotentReplaySignal();
 
+    const claim = await captureClaimContext(tx, customerId, dto.conversationId?.toLowerCase() ?? null, now);
+
     const quantities = await loadItemQuantities(tx, itemIds);
     for (const line of dto.lines) {
       const q = quantities.get(line.itemId.toLowerCase())!;
@@ -85,6 +89,10 @@ export async function reserveRequest(
         idempotencyKey,
         payloadHash,
         reasonConfirmed: dto.reason,
+        conversationId: claim.context.conversationId,
+        claimContext: claim.context,
+        aiProposal: claim.proposal,
+        reasonOverridden: claim.proposal !== null && claim.proposal.reason !== dto.reason,
         state: 'PROCESSING',
         ...lease,
         createdAt: now,
@@ -107,12 +115,68 @@ export async function reserveRequest(
       requestId: request.id,
       type: 'REQUEST_RECEIVED',
       actor: 'CUSTOMER',
-      data: { reason: dto.reason, lines: dto.lines.map((l) => ({ itemId: l.itemId.toLowerCase(), quantity: l.quantity })) },
+      data: {
+        reason: dto.reason,
+        lines: dto.lines.map((l) => ({ itemId: l.itemId.toLowerCase(), quantity: l.quantity })),
+        conversationId: claim.context.conversationId,
+        proposedReason: claim.proposal?.reason ?? null,
+      },
       createdAt: now,
     });
 
     return { requestId: request.id, leaseOwner: lease.leaseOwner };
   });
+}
+
+const FLAG_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Locks the conversation (if any), marks it submitted and snapshots what the gate needs.
+ * The lock serialises two submissions from the same chat.
+ */
+async function captureClaimContext(tx: Database, customerId: string, conversationId: string | null, now: Date) {
+  const flagged = await tx
+    .select({ id: conversations.id })
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.customerId, customerId),
+        gte(conversations.createdAt, new Date(now.getTime() - FLAG_LOOKBACK_MS)),
+        conversationId ? ne(conversations.id, conversationId) : undefined,
+        or(
+          sql`(${conversations.flags}->>'injectionAttempt')::boolean`,
+          sql`(${conversations.flags}->>'mentionsOtherCustomerOrder')::boolean`,
+          sql`(${conversations.flags}->>'abusive')::boolean`,
+        ),
+      ),
+    )
+    .limit(1);
+  const priorFlaggedConversation = flagged.length > 0;
+
+  if (!conversationId) {
+    const context: ClaimContext = { conversationId: null, handoverReason: null, discussedItemIds: [], flags: null, priorFlaggedConversation };
+    return { context, proposal: null };
+  }
+
+  const [conversation] = await tx
+    .select()
+    .from(conversations)
+    .where(and(eq(conversations.id, conversationId), eq(conversations.customerId, customerId)))
+    .for('update');
+  if (!conversation) throw new RefundRequestException('ORDER_OR_ITEM_NOT_FOUND', "We couldn't find that conversation.");
+  if (conversation.state !== 'ACTIVE') {
+    throw new RefundRequestException('CONVERSATION_ALREADY_SUBMITTED', 'A claim was already submitted from this conversation.');
+  }
+  await tx.update(conversations).set({ state: 'SUBMITTED', updatedAt: now }).where(eq(conversations.id, conversationId));
+
+  const context: ClaimContext = {
+    conversationId,
+    handoverReason: conversation.handoverReason as ClaimContext['handoverReason'],
+    discussedItemIds: conversation.discussedItemIds,
+    flags: conversation.flags,
+    priorFlaggedConversation,
+  };
+  return { context, proposal: (conversation.latestProposal as ProposalRecord | null) ?? null };
 }
 
 function notFound(): RefundRequestException {

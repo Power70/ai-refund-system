@@ -27,6 +27,8 @@ export const conversations = pgTable(
       .references(() => customers.id, { onDelete: 'restrict' }),
     state: conversationStateEnum('state').notNull().default('ACTIVE'),
     mode: conversationModeEnum('mode').notNull(),
+    // Why the chat switched to the claim form: AI_DISABLED, AI_FAILED or TURN_LIMIT.
+    handoverReason: text('handover_reason'),
     turnCount: integer('turn_count').notNull().default(0),
     failedTurns: integer('failed_turns').notNull().default(0),
     // Verified claim proposal shown to the customer (see ProposalView).
@@ -42,6 +44,8 @@ export const conversations = pgTable(
   (t) => [
     index('conversations_customer_created_idx').on(t.customerId, t.createdAt),
     check('conversations_counts_non_negative', sql`${t.turnCount} >= 0 AND ${t.failedTurns} >= 0`),
+    check('conversations_handover_reason', sql`${t.handoverReason} IS NULL OR ${t.handoverReason} IN ('AI_DISABLED', 'AI_FAILED', 'TURN_LIMIT')`),
+    check('conversations_manual_has_reason', sql`(${t.mode} = 'MANUAL') = (${t.handoverReason} IS NOT NULL)`),
   ],
 );
 

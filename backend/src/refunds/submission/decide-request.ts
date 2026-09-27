@@ -42,8 +42,7 @@ export async function decideRequest(db: Database, requestId: string, leaseOwner:
     confirmedReason: request.reasonConfirmed,
     confirmedItemIds: lines.map((l) => l.orderItemId),
     assessment,
-    // Set from the customer's conversation history once the AI conversation exists.
-    priorFlaggedConversation: false,
+    priorFlaggedConversation: request.claimContext?.priorFlaggedConversation ?? false,
     minConfidence: options.minConfidence,
   });
   const statuses = finalLineStatuses(evaluation, gate.status);

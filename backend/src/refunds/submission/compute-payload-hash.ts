@@ -8,6 +8,8 @@ export function computePayloadHash(dto: SubmitRefundRequestDto): string {
     orderNumber: dto.orderNumber,
     reason: dto.reason,
     lines: [...dto.lines].map((l) => ({ itemId: l.itemId.toLowerCase(), quantity: l.quantity })).sort((a, b) => a.itemId.localeCompare(b.itemId)),
+    // Included only when present, so hashes of claims without a conversation are unchanged.
+    ...(dto.conversationId ? { conversationId: dto.conversationId.toLowerCase() } : {}),
   };
   return createHash('sha256').update(canonicalJson(claim)).digest('hex');
 }

@@ -66,6 +66,7 @@ export class ConversationViewDto {
   @ApiProperty({ format: 'uuid' }) conversationId: string;
   @ApiProperty({ enum: ['ACTIVE', 'SUBMITTED', 'CLOSED'] }) state: string;
   @ApiProperty({ enum: ['AI', 'MANUAL'], description: 'MANUAL: show the claim form instead of chatting' }) mode: 'AI' | 'MANUAL';
+  @ApiProperty({ nullable: true, type: String, description: 'Set once a claim was submitted from this conversation' }) requestId: string | null;
   @ApiProperty({ type: [MessageViewDto] }) messages: MessageViewDto[];
   @ApiProperty({ type: [QuickReplyDto] }) quickReplies: QuickReplyDto[];
   @ApiProperty({ type: ProposalViewDto, nullable: true }) proposal: ProposalViewDto | null;
