@@ -1,0 +1,74 @@
+# Refund policy: the company's single source of truth.
+# The decision engine enforces exactly what is written here. To change the policy:
+# edit this file, bump `version`, make sure the policy tests pass, and restart the API.
+# Money is in minor units (cents): 50000 = $500.00.
+
+version: "2026.09-1"
+effectiveFrom: "2026-09-01T00:00:00Z"
+currency: USD
+reviewEtaBusinessDays: 2
+precedence: [DENY, REVIEW, ALLOW]   # when several rules match an item, the first outcome listed wins
+defaultOutcome: REVIEW              # an item no rule recognises goes to a person, never auto-approved
+reasons: [DAMAGED, WRONG_ITEM, NOT_AS_DESCRIBED, CHANGED_MIND, OTHER]
+
+lineRules:
+  - id: NOT_DELIVERED
+    when: { fact: item.delivered, op: eq, value: false }
+    outcome: REVIEW
+    publicReason: "We need to confirm delivery details before processing this item."
+
+  - id: WINDOW_EXPIRED
+    when: { fact: item.daysSinceDelivery, op: gt, value: 30 }
+    outcome: DENY
+    publicReason: "Refunds are available within 30 days of delivery."
+
+  - id: FINAL_SALE
+    when:
+      all:
+        - { fact: item.finalSale, op: eq, value: true }
+        - { fact: claim.reason, op: notIn, value: [DAMAGED, WRONG_ITEM] }
+    outcome: DENY
+    publicReason: "Final-sale items are not eligible for a refund."
+
+  # Final sale says no, but a damaged or wrong item says yes: conflicting rules go to a person.
+  - id: FINAL_SALE_DEFECT_CONFLICT
+    when:
+      all:
+        - { fact: item.finalSale, op: eq, value: true }
+        - { fact: claim.reason, op: in, value: [DAMAGED, WRONG_ITEM] }
+    outcome: REVIEW
+    publicReason: "A team member will review this final-sale item."
+
+  - id: PRIOR_DENIED_RESUBMISSION
+    when: { fact: item.priorDeniedRequest, op: eq, value: true }
+    outcome: REVIEW
+    publicReason: "This item has a previous request, so a team member will review it."
+
+  - id: DEFECT_ELIGIBLE
+    when:
+      all:
+        - { fact: claim.reason, op: in, value: [DAMAGED, WRONG_ITEM, NOT_AS_DESCRIBED] }
+        - { fact: item.daysSinceDelivery, op: lte, value: 30 }
+    outcome: ALLOW
+    publicReason: "Damaged, incorrect or not-as-described items within 30 days qualify for a refund."
+
+  - id: CHANGE_OF_MIND_ELIGIBLE
+    when:
+      all:
+        - { fact: claim.reason, op: eq, value: CHANGED_MIND }
+        - { fact: item.finalSale, op: eq, value: false }
+        - { fact: item.daysSinceDelivery, op: lte, value: 30 }
+    outcome: ALLOW
+    publicReason: "Items returned within 30 days qualify for a refund."
+  # Reason OTHER matches no ALLOW rule, so it falls through to defaultOutcome (REVIEW).
+
+requestRules:
+  - id: HIGH_VALUE
+    when: { fact: request.cumulativeOrderRefundMinor, op: gt, value: 50000 }
+    outcome: REVIEW
+    publicReason: "Refunds over $500 are reviewed by our team."
+
+  - id: HIGH_FREQUENCY
+    when: { fact: customer.requestsLast30Days, op: gt, value: 3 }
+    outcome: REVIEW
+    publicReason: "A team member will review this request."
