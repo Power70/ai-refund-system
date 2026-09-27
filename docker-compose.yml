@@ -49,6 +49,8 @@ services:
       POLICY_FILE: /app/policy/refund-policy.yaml
       # Signs customer session cookies. Empty = a random secret per start (sessions reset on restart).
       SESSION_SECRET: ${SESSION_SECRET:-}
+      # Support dashboard token. Empty = the public demo token "admin-demo-token" (with a warning).
+      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
     # The company refund policy, read-only. Edit policy/refund-policy.yaml, then
     # `docker-compose restart api` registers the new version (no rebuild needed).
     volumes:

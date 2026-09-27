@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ConfigModule } from '@nestjs/config';
+import { AdminModule } from './admin/admin.module.js';
 import { throttlerOptions } from './common/rate-limit/throttler-options.js';
 import { validateEnv } from './config/validate-env.js';
 import { CustomerAuthModule } from './customer-auth/customer-auth.module.js';
@@ -27,6 +28,7 @@ import { RefundsModule } from './refunds/refunds.module.js';
     CustomerAuthModule,
     OrdersModule,
     RefundsModule,
+    AdminModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

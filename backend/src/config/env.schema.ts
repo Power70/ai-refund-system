@@ -22,6 +22,12 @@ export const envSchema = z.object({
   // An automatic approval also needs the AI's self-reported confidence at or above this.
   // It can only add escalations; it is never the sole check (see the safety gate).
   AI_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.95),
+  // Bearer token for the support dashboard API. When unset (or empty) the documented demo token
+  // is used with a startup warning; set your own for anything beyond a local demo.
+  ADMIN_TOKEN: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.string().min(12, 'must be at least 12 characters').default('admin-demo-token'),
+  ),
   SESSION_SECRET: z.preprocess(
     (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
     z.string().min(32, 'must be at least 32 characters').optional(),
