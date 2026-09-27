@@ -17,6 +17,8 @@ export const envSchema = z.object({
   POLICY_FILE: z.string().min(1).default('../policy/refund-policy.yaml'),
   // Signs customer session cookies. Optional: when unset (or empty) a random secret is generated
   // at startup, so no guessable default ever ships in the public repo; sessions then reset on restart.
+  // How often stuck requests are swept, in ms (0 = off).
+  SWEEPER_INTERVAL_MS: z.coerce.number().int().min(0).default(30_000),
   // An automatic approval also needs the AI's self-reported confidence at or above this.
   // It can only add escalations; it is never the sole check (see the safety gate).
   AI_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.95),

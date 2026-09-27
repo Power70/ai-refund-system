@@ -1,0 +1,2 @@
+ALTER TABLE "decisions" ALTER COLUMN "rule_trace" DROP NOT NULL;--> statement-breakpoint
+ALTER TABLE "decisions" ADD CONSTRAINT "decisions_trace_or_system_failure" CHECK ("decisions"."rule_trace" IS NOT NULL OR ("decisions"."status" = 'ESCALATED' AND 'SYSTEM_PROCESSING_FAILURE' = ANY("decisions"."escalation_reasons")));

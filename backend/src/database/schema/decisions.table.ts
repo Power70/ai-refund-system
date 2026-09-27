@@ -19,7 +19,8 @@ export const decisions = pgTable(
     policyVersionId: uuid('policy_version_id')
       .notNull()
       .references(() => policyVersions.id, { onDelete: 'restrict' }),
-    ruleTrace: jsonb('rule_trace').$type<RequestEvaluation>().notNull(),
+    // Null only when processing failed repeatedly and the request went to a person unevaluated.
+    ruleTrace: jsonb('rule_trace').$type<RequestEvaluation>(),
     gateResult: jsonb('gate_result'),
     escalationReasons: text('escalation_reasons').array().notNull().default(sql`'{}'::text[]`),
     customerMessage: text('customer_message').notNull(),
@@ -31,5 +32,10 @@ export const decisions = pgTable(
     // Only an approval carries money.
     check('decisions_amount_only_when_approved', sql`${t.status} = 'APPROVED' OR ${t.approvedAmountMinor} = 0`),
     check('decisions_escalation_has_reasons', sql`${t.status} <> 'ESCALATED' OR cardinality(${t.escalationReasons}) > 0`),
+    // Every decision has a rule trace, except a system-failure escalation (the rules never ran).
+    check(
+      'decisions_trace_or_system_failure',
+      sql`${t.ruleTrace} IS NOT NULL OR (${t.status} = 'ESCALATED' AND 'SYSTEM_PROCESSING_FAILURE' = ANY(${t.escalationReasons}))`,
+    ),
   ],
 );

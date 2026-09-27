@@ -84,13 +84,7 @@ export class RefundSubmissionService {
    */
   private async decideSafely(requestId: string, leaseOwner: string): Promise<void> {
     try {
-      // AI intake arrives in a later step; until then every claim is a manual claim,
-      // so the safety gate sends any policy approval to a person.
-      await decideRequest(this.db, requestId, leaseOwner, {
-        assessment: { kind: 'MANUAL' },
-        priorFlaggedConversation: false,
-        minConfidence: this.minConfidence,
-      });
+      await decideRequest(this.db, requestId, leaseOwner, { minConfidence: this.minConfidence });
     } catch (error) {
       this.logger.error(`Deciding request ${requestId} failed; it stays PROCESSING for retry`, (error as Error).stack);
     }

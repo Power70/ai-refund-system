@@ -53,7 +53,7 @@ describe('demo world (e2e, real PostgreSQL)', () => {
       const { request, decision } = await requestByPublicId(db, publicId);
       expect(request).toMatchObject({ source: 'SEED', state: 'DECIDED', policyVersionId: policy.id, leaseOwner: null });
       expect(decision.status).toBe(entry.expected);
-      expect(decision.ruleTrace.policyVersion).toBe(policy.version);
+      expect(decision.ruleTrace!.policyVersion).toBe(policy.version);
     });
 
     it('#8 Hassan: escalated, then denied by a reviewer, so the item counts as previously denied', async () => {
