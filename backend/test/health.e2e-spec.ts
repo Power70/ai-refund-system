@@ -1,16 +1,22 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
+import { runMigrations } from '../src/database/run-migrations.js';
 import { createTestApp } from './create-test-app.js';
+import { createTestDatabase, type TestDatabase } from './support/test-database.js';
 
 describe('HTTP foundation (e2e)', () => {
   let app: NestExpressApplication;
+  let db: TestDatabase;
 
   beforeAll(async () => {
-    app = await createTestApp();
+    db = await createTestDatabase();
+    await runMigrations(db.url);
+    app = await createTestApp(db.url);
   });
 
   afterAll(async () => {
-    await app.close();
+    await app?.close();
+    await db?.drop();
   });
 
   it('GET /api/v1/health returns ok and nothing internal', async () => {
@@ -42,5 +48,25 @@ describe('HTTP foundation (e2e)', () => {
       .set('Content-Type', 'application/json')
       .send(big)
       .expect(413);
+  });
+});
+
+describe('health when the database is down (e2e)', () => {
+  let app: NestExpressApplication;
+
+  beforeAll(async () => {
+    // Nothing listens on port 1, so every connection attempt is refused.
+    app = await createTestApp('postgresql://nobody@127.0.0.1:1/none');
+  });
+
+  afterAll(async () => {
+    await app?.close();
+  });
+
+  it('answers 503 degraded quickly, without leaking why', async () => {
+    const started = Date.now();
+    const res = await request(app.getHttpServer()).get('/api/v1/health').expect(503);
+    expect(res.body).toEqual({ status: 'degraded' });
+    expect(Date.now() - started).toBeLessThan(3_000);
   });
 });

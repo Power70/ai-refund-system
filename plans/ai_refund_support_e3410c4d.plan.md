@@ -1,6 +1,6 @@
 ---
 name: AI Refund Support
-overview: Containerized AI-powered refund support product (NestJS + PostgreSQL/Prisma + Vite React). The customer talks to an AI assistant in their own words; the AI identifies the order, item and reason from the customer's own orders, asks clarifying questions, and proposes a structured refund claim shown as an interactive confirmation card. The customer confirms or edits it; a versioned, data-driven policy evaluated by a deterministic rules engine then decides using database facts plus the confirmed claim. The AI explains the outcome, answers follow-up questions grounded in the policy, and summarises cases for the human-in-the-loop dashboard. AI influence on outcomes is one-directional (it can only push toward human review). Any LLM key works through two protocol adapters; with no key the chat falls back to a manual claim card and the system escalates safely.
+overview: Containerized AI-powered refund support product (NestJS + PostgreSQL/Drizzle ORM + Vite React). The customer talks to an AI assistant in their own words; the AI identifies the order, item and reason from the customer's own orders, asks clarifying questions, and proposes a structured refund claim shown as an interactive confirmation card. The customer confirms or edits it; a versioned, data-driven policy evaluated by a deterministic rules engine then decides using database facts plus the confirmed claim. The AI explains the outcome, answers follow-up questions grounded in the policy, and summarises cases for the human-in-the-loop dashboard. AI influence on outcomes is one-directional (it can only push toward human review). Any LLM key works through two protocol adapters; with no key the chat falls back to a manual claim card and the system escalates safely.
 todos:
   - id: scaffold-infrastructure
     content: Scaffold backend/frontend, env schema, Dockerfiles, docker-compose (db, one-shot migrate, api, nginx web proxying /api), fresh-clone smoke script
@@ -9,7 +9,7 @@ todos:
     content: Policy YAML + zod schema + fact vocabulary, rule evaluator with precedence, PolicyVersion persistence, generated refund-policy.md, scenarios.yaml golden tests
     status: pending
   - id: build-data-layer
-    content: Prisma schema, migrations, relative-date idempotent seed of 15 scenario customers, quantity reservation with row locks
+    content: Drizzle schema, SQL migrations, relative-date idempotent seed of 15 scenario customers, quantity reservation with row locks
     status: pending
   - id: build-request-lifecycle
     content: Customer session, idempotent submission, two-transaction lease model, sweeper, status polling, admin resolution workflow, audit events
@@ -224,7 +224,9 @@ requestRules:
 
 The full rule trace (every rule, inputs, matched or not, the deciding rule per line) is stored with the decision.
 
-## 4. Data model (Prisma)
+## 4. Data model (Drizzle ORM, PostgreSQL)
+
+> **Changed during build:** Prisma was replaced by Drizzle ORM. Prisma 7 needs a native engine downloaded from `binaries.prisma.sh` even for code generation; that host was unreachable from every environment used to build and test, and it would also be an extra network dependency in reviewers' Docker builds. Drizzle is pure TypeScript, migrations are plain SQL files in `backend/drizzle/`, and they are applied by the compiled runtime migrator (no CLI in the image). Model names below are the logical design; tables use snake_case.
 
 ```
 Customer        id, name, email @unique, createdAt
@@ -267,7 +269,7 @@ AuditEvent      id, requestId, type, actor SYSTEM | AI | ADMIN | CUSTOMER, data 
 
 ### Refundable quantity and reservation (concurrency)
 
-- Inside Tx1, lock the selected `OrderItem` rows (`SELECT … FOR UPDATE` via `$queryRaw` in an interactive transaction, since Prisma's query API has no row-lock syntax).
+- Inside Tx1, lock the selected `OrderItem` rows (`SELECT … FOR UPDATE` via Drizzle's `.for('update')` inside a transaction).
 - `refundable = purchased − approved − processing − underReview` (approved includes human-approved resolutions).
 - If a requested quantity exceeds `refundable` → reject, with no request created:
   - a line already in PROCESSING or awaiting review → `409` "already being processed / under review";
@@ -437,7 +439,7 @@ DENIED and policy-ESCALATED outcomes are never changed by the gate.
    - same hash → return the request's current state (decided result, or `202 PROCESSING`);
    - different hash → `409`;
    - `PROCESSING` with an expired lease → reclaim with a compare-and-set (`UPDATE … SET lease_owner=?, lease_expires_at=?, attempt_count=attempt_count+1 WHERE id=? AND state='PROCESSING' AND lease_expires_at < now()`), and continue at step 4 only if exactly one row changed. The sweeper uses the same statement, so the two never both process a request.
-   - Two concurrent first submissions with the same key: one insert wins the unique constraint. The loser catches Prisma `P2002`, re-reads the request and returns its state.
+   - Two concurrent first submissions with the same key: one insert wins the unique constraint. The loser catches PostgreSQL unique violation `23505`, re-reads the request and returns its state.
 3. **Tx1:** lock order items → check refundable quantity → compute amounts from the DB → insert the request (`PROCESSING`, `leaseOwner = instanceId + attempt`, `leaseExpiresAt = now + 60s`) and its lines → audit `REQUEST_RECEIVED`. Commit.
 4. **Outside any transaction:** fact builder (using the request's captured `policyVersionId`) → policy engine → aggregator → gate → decision reply ∥ admin summary (in parallel). The AI budget is `AI_TIMEOUT_MS` per call (default 10s), and the whole step is capped at 40s, safely under the 60s lease. Processing is detached from the HTTP response, so a client disconnect doesn't abort it. Progress events are published to the request's SSE stream at each stage; with a single API instance an in-process event bus suffices (a multi-instance deployment would need Redis pub/sub, noted in the README).
 5. **Tx2:** `UPDATE refund_request SET state='DECIDED' WHERE id=? AND state='PROCESSING' AND lease_owner=?`. If 0 rows are updated, another worker owns it, so exit without writing. Otherwise insert the decision, AI call records and audit events. All-or-nothing.
@@ -636,10 +638,10 @@ Also a **labelled conversation eval set** (`backend/test/fixtures/intake-eval.ya
   - `.env.example` documents every variable; `.env` is git-ignored.
 - Services:
   1. `db`: postgres:16-alpine, named volume, `pg_isready` healthcheck.
-  2. `migrate`: one-shot, built from the backend **builder** stage (which has the Prisma CLI and the seed runtime), runs `prisma migrate deploy && prisma db seed`, `depends_on: db (service_healthy)`.
+  2. `migrate`: one-shot, same runtime image as the API, runs `node dist/database/run-migrations.js` (the seed step is added with the seed bit); `depends_on: db (service_healthy)`.
   3. `api`: `depends_on: migrate (service_completed_successfully)`, healthcheck on `/api/v1/health`, not published publicly.
   4. `web`: Nginx serving the build, proxying `/api` and `/docs` to `api` (with `proxy_buffering off` and a long read timeout on the SSE route), published on `8080`.
-- Multi-stage Dockerfiles on Debian-slim Node LTS images (avoids Prisma engine/OpenSSL issues on Alpine), non-root users, `.dockerignore`.
+- Multi-stage Dockerfiles on Debian-slim Node LTS images (glibc; npm 11 from Node 24 avoids an npm 10 install bug), non-root users, `.dockerignore`.
 - `scripts/smoke.sh`: fresh clone → `docker-compose up -d` → wait for health → through the API, submit confirmed claims for scenarios 2 (expect DENIED) and 5 (expect ESCALATED), both independent of AI; then scenario 1 (expect APPROVED if AI status is `ok`, else ESCALATED `AI_UNAVAILABLE`) → check that `/docs` responds and that `/health` exposes no internals.
 
 ## 11. Testing (lean, high-value)

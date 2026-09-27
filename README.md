@@ -31,4 +31,19 @@ cd backend && npm install && npm run start:dev
 cd frontend && npm install && npm run dev
 ```
 
-Tests: `cd backend && npm test && npm run test:e2e`.
+The API needs PostgreSQL. Set `DATABASE_URL` (e.g. `postgresql://refund:refund_demo_password@localhost:5432/refund_support`) and run `npm run db:migrate` in `backend/` before `npm run start:dev`.
+
+Tests (in `backend/`):
+
+```bash
+npm test            # unit tests, no database needed
+npm run test:e2e    # needs PostgreSQL; each suite creates and drops its own database
+```
+
+End-to-end tests connect to `postgresql://refund:refund_demo_password@127.0.0.1:5432/postgres` by default; override with `TEST_DATABASE_ADMIN_URL` (the user must be allowed to create databases). A quick throwaway server:
+
+```bash
+docker run --rm -d -p 5432:5432 -e POSTGRES_USER=refund -e POSTGRES_PASSWORD=refund_demo_password postgres:16-alpine
+```
+
+Database changes: edit `backend/src/database/schema/`, then `npm run db:generate` writes a new SQL migration to `backend/drizzle/`.

@@ -1,12 +1,10 @@
-# Debian-slim (glibc) rather than Alpine: avoids native-engine/OpenSSL issues
-# with Prisma, which is added in the next build step.
+# Debian-slim (glibc) Node LTS. npm 11 (bundled with Node 24) avoids an npm 10
+# install bug with this dependency tree.
 FROM node:24-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
-# Full toolchain (dev dependencies included). Later reused as the one-shot
-# "migrate" service image, which needs the Prisma CLI.
 FROM deps AS build
 COPY . .
 RUN npm run build
@@ -20,6 +18,8 @@ WORKDIR /app
 COPY --from=prod-deps --chown=node:node /app/package.json ./
 COPY --from=prod-deps --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/dist ./dist
+# SQL migrations, applied by the one-shot "migrate" service (dist/database/run-migrations.js).
+COPY --from=build --chown=node:node /app/drizzle ./drizzle
 USER node
 EXPOSE 3000
 CMD ["node", "dist/main.js"]

@@ -1,19 +1,29 @@
 import { validateEnv } from './validate-env.js';
 
+const DATABASE_URL = 'postgresql://refund:secret@db:5432/refund_support';
+
 describe('validateEnv', () => {
-  it('applies safe defaults when nothing is set', () => {
-    expect(validateEnv({})).toEqual({ NODE_ENV: 'development', PORT: 3000 });
+  it('applies safe defaults for everything except the database', () => {
+    expect(validateEnv({ DATABASE_URL })).toEqual({ NODE_ENV: 'development', PORT: 3000, DATABASE_URL });
   });
 
   it('coerces PORT from a string', () => {
-    expect(validateEnv({ PORT: '8081' }).PORT).toBe(8081);
+    expect(validateEnv({ DATABASE_URL, PORT: '8081' }).PORT).toBe(8081);
   });
 
   it('rejects an out-of-range PORT with a readable message', () => {
-    expect(() => validateEnv({ PORT: '70000' })).toThrow(/Invalid environment configuration: PORT/);
+    expect(() => validateEnv({ DATABASE_URL, PORT: '70000' })).toThrow(/Invalid environment configuration: PORT/);
   });
 
   it('rejects an unknown NODE_ENV', () => {
-    expect(() => validateEnv({ NODE_ENV: 'staging' })).toThrow(/NODE_ENV/);
+    expect(() => validateEnv({ DATABASE_URL, NODE_ENV: 'staging' })).toThrow(/NODE_ENV/);
+  });
+
+  it('requires DATABASE_URL', () => {
+    expect(() => validateEnv({})).toThrow(/DATABASE_URL/);
+  });
+
+  it('rejects a non-postgres DATABASE_URL', () => {
+    expect(() => validateEnv({ DATABASE_URL: 'mysql://x@y/z' })).toThrow(/postgres/);
   });
 });
