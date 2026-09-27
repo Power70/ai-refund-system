@@ -73,6 +73,8 @@ describe('customer conversations (e2e)', () => {
 
     it('starts in AI mode with a greeting', () => {
       expect(grace.started).toMatchObject({ state: 'ACTIVE', mode: 'AI', proposal: null, quickReplies: [] });
+      expect(grace.started.reasons).toContainEqual({ reason: 'DAMAGED', label: 'It arrived damaged or defective' });
+      expect(grace.started.reasons).toHaveLength(5);
       expect(grace.started.messages).toEqual([expect.objectContaining({ role: 'ASSISTANT', text: expect.stringMatching(/^Hi Grace,/) })]);
     });
 

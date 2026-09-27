@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { fetchHealth } from '../api/fetchHealth'
+import { api } from '../api/client'
 
 export type ApiHealthState = 'checking' | 'ok' | 'degraded' | 'unreachable'
 
@@ -16,8 +16,7 @@ export function useApiHealth(): ApiHealthState {
       controller.abort()
       controller = new AbortController()
       try {
-        const { status } = await fetchHealth(controller.signal)
-        setState(status)
+        setState(await api.health(controller.signal))
       } catch (error) {
         if (!(error instanceof DOMException && error.name === 'AbortError')) {
           setState('unreachable')

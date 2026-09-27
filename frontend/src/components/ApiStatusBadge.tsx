@@ -1,5 +1,6 @@
-import { IconAlertTriangle, IconCircleCheck, IconLoader2 } from '@tabler/icons-react'
+import { IconAlertTriangle, IconCircleCheck } from '@tabler/icons-react'
 import type { ApiHealthState } from '../hooks/useApiHealth'
+import { Spinner } from './ui'
 
 interface ApiStatusBadgeProps {
   state: ApiHealthState
@@ -27,7 +28,7 @@ export function ApiStatusBadge({ state }: ApiStatusBadgeProps) {
       className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium ring-1 ${tone}`}
     >
       {state === 'ok' && <IconCircleCheck size={16} aria-hidden="true" />}
-      {state === 'checking' && <IconLoader2 size={16} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />}
+      {state === 'checking' && <Spinner />}
       {(state === 'degraded' || state === 'unreachable') && <IconAlertTriangle size={16} aria-hidden="true" />}
       {LABELS[state]}
     </span>

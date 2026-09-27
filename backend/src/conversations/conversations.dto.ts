@@ -62,6 +62,11 @@ export class ProposalViewDto {
   @ApiProperty({ type: [ProposalLineDto] }) lines: ProposalLineDto[];
 }
 
+export class ReasonOptionDto {
+  @ApiProperty({ enum: REFUND_REASONS }) reason: RefundReason;
+  @ApiProperty({ example: 'It arrived damaged or defective' }) label: string;
+}
+
 export class ConversationViewDto {
   @ApiProperty({ format: 'uuid' }) conversationId: string;
   @ApiProperty({ enum: ['ACTIVE', 'SUBMITTED', 'CLOSED'] }) state: string;
@@ -70,4 +75,5 @@ export class ConversationViewDto {
   @ApiProperty({ type: [MessageViewDto] }) messages: MessageViewDto[];
   @ApiProperty({ type: [QuickReplyDto] }) quickReplies: QuickReplyDto[];
   @ApiProperty({ type: ProposalViewDto, nullable: true }) proposal: ProposalViewDto | null;
+  @ApiProperty({ type: [ReasonOptionDto], description: 'Reasons the customer can choose, with display labels' }) reasons: ReasonOptionDto[];
 }

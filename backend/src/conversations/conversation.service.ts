@@ -4,10 +4,12 @@ import { LlmService } from '../ai/llm.service.js';
 import { DATABASE, type Database } from '../database/database.js';
 import { aiCalls, conversationMessages, conversations, customers, orderItems, orders, refundRequests, type ConversationFlags } from '../database/schema.js';
 import { loadItemQuantities } from '../orders/item-quantities.js';
-import { REASON_LABELS } from '../policy/policy-schema.js';
+import { REASON_LABELS, REFUND_REASONS } from '../policy/policy-schema.js';
 import { assistantTurnSchema, buildTurnPrompt, type ChatContext, type ContextOrder, sanitizeText, verifyTurn, type ProposalRecord, type QuickReply } from './chat-turn.js';
 import type { ConversationViewDto, SendMessageDto } from './conversations.dto.js';
 import { answerFollowUp, loadDecisionBrief } from '../refunds/refund-messages.js';
+
+const REASON_OPTIONS = REFUND_REASONS.map((reason) => ({ reason, label: REASON_LABELS[reason] }));
 
 export const MAX_AI_TURNS = 6;
 export const MAX_FOLLOW_UPS = 10;
@@ -114,6 +116,7 @@ export class ConversationService {
       messages: messages.map((m) => ({ id: m.id, role: m.role, text: m.content, createdAt: m.createdAt.toISOString() })),
       quickReplies: conversation.mode === 'AI' ? ((lastAssistant?.structured as AssistantStructured | null)?.quickReplies ?? []) : [],
       proposal: proposal ? { orderId: proposal.orderId, orderNumber: proposal.orderNumber, reason: proposal.reason, lines: proposal.lines } : null,
+      reasons: REASON_OPTIONS,
     };
   }
 
