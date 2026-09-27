@@ -23,12 +23,24 @@ export const conditionSchema: z.ZodType<PolicyCondition> = z.lazy(() =>
   ]),
 ) as z.ZodType<PolicyCondition>;
 
+const publicReasonSchema = z
+  .string()
+  .min(1)
+  .max(300)
+  .refine((s) => !s.includes('{{'), 'publicReason cannot contain placeholders');
+
 const ruleSchema = z.strictObject({
   id: z.string().regex(/^[A-Z][A-Z0-9_]*$/, 'rule ids are UPPER_SNAKE_CASE'),
   when: conditionSchema,
   outcome: z.enum(POLICY_OUTCOMES),
   // Shown to customers verbatim, so keep it short and free of template syntax.
-  publicReason: z.string().min(1).max(300).refine((s) => !s.includes('{{'), 'publicReason cannot contain placeholders'),
+  publicReason: publicReasonSchema,
+});
+
+// Request rules can hold back or deny a whole request, never approve one:
+// a request-level ALLOW would read as "approve everything" and bypass item rules.
+const requestRuleSchema = ruleSchema.extend({
+  outcome: z.enum(['DENY', 'REVIEW'], { error: 'request rules may only DENY or REVIEW' }),
 });
 
 export const policyDocumentSchema = z
@@ -40,9 +52,10 @@ export const policyDocumentSchema = z
     precedence: z.tuple([z.enum(POLICY_OUTCOMES), z.enum(POLICY_OUTCOMES), z.enum(POLICY_OUTCOMES)]),
     // Fail safe: a request no rule recognises goes to a human or is denied, never auto-approved.
     defaultOutcome: z.enum(['REVIEW', 'DENY']),
+    defaultPublicReason: publicReasonSchema,
     reasons: z.array(z.enum(REFUND_REASONS)).min(1),
     lineRules: z.array(ruleSchema).min(1),
-    requestRules: z.array(ruleSchema).default([]),
+    requestRules: z.array(requestRuleSchema).default([]),
   })
   .superRefine((policy, ctx) => {
     if (new Set(policy.precedence).size !== POLICY_OUTCOMES.length) {

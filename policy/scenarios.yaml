@@ -1,0 +1,125 @@
+# Golden cases for the refund policy, written so the business can read and extend them.
+# Every policy change must keep these passing (they run in the backend unit tests).
+#
+# Each scenario is one refund request:
+#   reason:   the customer's confirmed reason (applies to every item)
+#   history:  refundedOrPending = cents already refunded or pending on the order (default 0)
+#             requestsLast30Days = the customer's earlier requests (default 0)
+#   items:    amount in cents; daysSinceDelivery: null means not delivered yet
+#   expect:   status, approved amount (cents), each item's outcome and deciding rule
+#             (DEFAULT = no rule matched), and any request rules that matched.
+# Scenarios that depend on the AI (injection, reason changed on the card) or on input
+# checks (item already refunded) are tested elsewhere: the policy never sees those.
+
+- name: "#1 Damaged shirt, 5 days after delivery"
+  reason: DAMAGED
+  items: [{ amount: 4999, daysSinceDelivery: 5 }]
+  expect: { status: APPROVED, approved: 4999, items: [ALLOW], rules: [DEFECT_ELIGIBLE] }
+
+- name: "#2 Damaged item, 45 days after delivery"
+  reason: DAMAGED
+  items: [{ amount: 3500, daysSinceDelivery: 45 }]
+  expect: { status: DENIED, approved: 0, items: [DENY], rules: [WINDOW_EXPIRED] }
+
+- name: "#3 Final-sale belt, changed mind"
+  reason: CHANGED_MIND
+  items: [{ amount: 2500, daysSinceDelivery: 10, finalSale: true }]
+  expect: { status: DENIED, approved: 0, items: [DENY], rules: [FINAL_SALE] }
+
+- name: "#4 Final-sale item arrived damaged (conflicting rules go to a person)"
+  reason: DAMAGED
+  items: [{ amount: 6000, daysSinceDelivery: 3, finalSale: true }]
+  expect: { status: ESCALATED, approved: 0, items: [REVIEW], rules: [FINAL_SALE_DEFECT_CONFLICT] }
+
+- name: "#5 Wrong laptop sent, $749"
+  reason: WRONG_ITEM
+  items: [{ amount: 74900, daysSinceDelivery: 4 }]
+  expect: { status: ESCALATED, approved: 0, items: [ALLOW], rules: [DEFECT_ELIGIBLE], requestRules: [HIGH_VALUE] }
+
+- name: "#6 $280 damaged item after $300 already refunded on the order (cumulative > $500)"
+  reason: DAMAGED
+  history: { refundedOrPending: 30000 }
+  items: [{ amount: 28000, daysSinceDelivery: 8 }]
+  expect: { status: ESCALATED, approved: 0, items: [ALLOW], rules: [DEFECT_ELIGIBLE], requestRules: [HIGH_VALUE] }
+
+- name: "#7 Changed mind on an $80 shirt, 10 days"
+  reason: CHANGED_MIND
+  items: [{ amount: 8000, daysSinceDelivery: 10 }]
+  expect: { status: APPROVED, approved: 8000, items: [ALLOW], rules: [CHANGE_OF_MIND_ELIGIBLE] }
+
+- name: "#8 Item previously denied, resubmitted with a new reason"
+  reason: DAMAGED
+  items: [{ amount: 4000, daysSinceDelivery: 12, priorDenied: true }]
+  expect: { status: ESCALATED, approved: 0, items: [REVIEW], rules: [PRIOR_DENIED_RESUBMISSION] }
+
+- name: "#9 Customer with 4 requests in the last 30 days"
+  reason: DAMAGED
+  history: { requestsLast30Days: 4 }
+  items: [{ amount: 3000, daysSinceDelivery: 6 }]
+  expect: { status: ESCALATED, approved: 0, items: [ALLOW], rules: [DEFECT_ELIGIBLE], requestRules: [HIGH_FREQUENCY] }
+
+- name: "#10 Order not delivered yet"
+  reason: DAMAGED
+  items: [{ amount: 5000, daysSinceDelivery: null }]
+  expect: { status: ESCALATED, approved: 0, items: [REVIEW], rules: [NOT_DELIVERED] }
+
+- name: "#11 Shirt + final-sale belt, both changed mind: shirt refunded, belt not"
+  reason: CHANGED_MIND
+  items: [{ amount: 4500, daysSinceDelivery: 7 }, { amount: 2500, daysSinceDelivery: 7, finalSale: true }]
+  expect: { status: APPROVED, approved: 4500, items: [ALLOW, DENY], rules: [CHANGE_OF_MIND_ELIGIBLE, FINAL_SALE] }
+
+- name: "#14 Exactly $500.00 does not need review"
+  reason: DAMAGED
+  items: [{ amount: 50000, daysSinceDelivery: 2 }]
+  expect: { status: APPROVED, approved: 50000, items: [ALLOW], rules: [DEFECT_ELIGIBLE] }
+
+- name: "Boundary: $500.01 needs review"
+  reason: DAMAGED
+  items: [{ amount: 50001, daysSinceDelivery: 2 }]
+  expect: { status: ESCALATED, approved: 0, items: [ALLOW], rules: [DEFECT_ELIGIBLE], requestRules: [HIGH_VALUE] }
+
+- name: "Boundary: day 30 is inside the window"
+  reason: CHANGED_MIND
+  items: [{ amount: 2000, daysSinceDelivery: 30 }]
+  expect: { status: APPROVED, approved: 2000, items: [ALLOW], rules: [CHANGE_OF_MIND_ELIGIBLE] }
+
+- name: "Boundary: day 31 is outside the window"
+  reason: CHANGED_MIND
+  items: [{ amount: 2000, daysSinceDelivery: 31 }]
+  expect: { status: DENIED, approved: 0, items: [DENY], rules: [WINDOW_EXPIRED] }
+
+- name: "Reason OTHER matches no rule, so a person reviews it"
+  reason: OTHER
+  items: [{ amount: 2000, daysSinceDelivery: 5 }]
+  expect: { status: ESCALATED, approved: 0, items: [REVIEW], rules: [DEFAULT] }
+
+- name: "Final-sale item not as described is denied (only damaged or wrong item override final sale)"
+  reason: NOT_AS_DESCRIBED
+  items: [{ amount: 3000, daysSinceDelivery: 5, finalSale: true }]
+  expect: { status: DENIED, approved: 0, items: [DENY], rules: [FINAL_SALE] }
+
+- name: "Expired final-sale item arrived damaged: expiry wins over the conflict review"
+  reason: DAMAGED
+  items: [{ amount: 3000, daysSinceDelivery: 40, finalSale: true }]
+  expect: { status: DENIED, approved: 0, items: [DENY], rules: [WINDOW_EXPIRED] }
+
+- name: "Expired and over $500: denied, not escalated"
+  reason: DAMAGED
+  items: [{ amount: 90000, daysSinceDelivery: 60 }]
+  expect: { status: DENIED, approved: 0, items: [DENY], rules: [WINDOW_EXPIRED], requestRules: [] }
+
+- name: "Frequent requester with an expired order: denied, not escalated"
+  reason: DAMAGED
+  history: { requestsLast30Days: 9 }
+  items: [{ amount: 3000, daysSinceDelivery: 45 }]
+  expect: { status: DENIED, approved: 0, items: [DENY], rules: [WINDOW_EXPIRED], requestRules: [] }
+
+- name: "One item needs review and one is denied: the whole request goes to a person"
+  reason: CHANGED_MIND
+  items: [{ amount: 3000, daysSinceDelivery: null }, { amount: 2000, daysSinceDelivery: 5, finalSale: true }]
+  expect: { status: ESCALATED, approved: 0, items: [REVIEW, DENY], rules: [NOT_DELIVERED, FINAL_SALE] }
+
+- name: "Splitting inside one request doesn't dodge the threshold ($300 + $250)"
+  reason: DAMAGED
+  items: [{ amount: 30000, daysSinceDelivery: 3 }, { amount: 25000, daysSinceDelivery: 3 }]
+  expect: { status: ESCALATED, approved: 0, items: [ALLOW, ALLOW], rules: [DEFECT_ELIGIBLE, DEFECT_ELIGIBLE], requestRules: [HIGH_VALUE] }

@@ -14,6 +14,7 @@ function basePolicy(): Record<string, unknown> {
     reviewEtaBusinessDays: 2,
     precedence: ['DENY', 'REVIEW', 'ALLOW'],
     defaultOutcome: 'REVIEW',
+    defaultPublicReason: 'A team member will review this request.',
     reasons: ['DAMAGED', 'CHANGED_MIND'],
     lineRules: [
       { id: 'WINDOW_EXPIRED', when: { fact: 'item.daysSinceDelivery', op: 'gt', value: 30 }, outcome: 'DENY', publicReason: 'Too late.' },
@@ -70,6 +71,18 @@ describe('parsePolicy', () => {
 
   it('rejects ALLOW as the default outcome (must fail safe)', () => {
     expect(problemsFor({ ...basePolicy(), defaultOutcome: 'ALLOW' }).join()).toContain('defaultOutcome');
+  });
+
+  it('rejects a request rule that would ALLOW a whole request', () => {
+    const p = basePolicy();
+    p.requestRules = [{ id: 'VIP', when: { fact: 'customer.requestsLast30Days', op: 'eq', value: 0 }, outcome: 'ALLOW', publicReason: 'x' }];
+    expect(problemsFor(p).join()).toContain('request rules may only DENY or REVIEW');
+  });
+
+  it('requires a customer-facing reason for the default outcome', () => {
+    const p = basePolicy();
+    delete p.defaultPublicReason;
+    expect(problemsFor(p).join()).toContain('defaultPublicReason');
   });
 
   it('rejects a precedence that repeats an outcome', () => {

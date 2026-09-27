@@ -9,6 +9,7 @@ currency: USD
 reviewEtaBusinessDays: 2
 precedence: [DENY, REVIEW, ALLOW]   # when several rules match an item, the first outcome listed wins
 defaultOutcome: REVIEW              # an item no rule recognises goes to a person, never auto-approved
+defaultPublicReason: "A team member will review this request."
 reasons: [DAMAGED, WRONG_ITEM, NOT_AS_DESCRIBED, CHANGED_MIND, OTHER]
 
 lineRules:
@@ -62,6 +63,7 @@ lineRules:
     publicReason: "Items returned within 30 days qualify for a refund."
   # Reason OTHER matches no ALLOW rule, so it falls through to defaultOutcome (REVIEW).
 
+# Request rules look at the whole request. They may only REVIEW or DENY, never approve.
 requestRules:
   - id: HIGH_VALUE
     when: { fact: request.cumulativeOrderRefundMinor, op: gt, value: 50000 }
