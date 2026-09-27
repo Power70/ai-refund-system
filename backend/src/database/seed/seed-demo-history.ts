@@ -5,6 +5,8 @@ import type { RegisteredPolicy } from '../../policy/registry/active-policy.types
 import { canonicalJson } from '../../policy/registry/canonical-json.js';
 import { buildRequestFacts } from '../../refunds/facts/build-request-facts.js';
 import { finalLineStatuses } from '../../refunds/final-line-statuses.js';
+import { deriveResolution } from '../../admin/resolution/derive-resolution.js';
+import { resolutionCustomerMessage } from '../../refunds/messages/resolution-customer-message.js';
 import { templateCustomerMessage } from '../../refunds/messages/template-customer-message.js';
 import type { Database } from '../database.types.js';
 import * as schema from '../schema/index.js';
@@ -51,14 +53,14 @@ export async function seedDemoHistory(
 
 async function create(tx: Database, policy: RegisteredPolicy, entry: DemoHistoryEntry, at: Date): Promise<void> {
   const [order] = await tx
-    .select({ id: schema.orders.id, customerId: schema.orders.customerId })
+    .select({ id: schema.orders.id, customerId: schema.orders.customerId, currency: schema.orders.currency })
     .from(schema.orders)
     .innerJoin(schema.customers, eq(schema.customers.id, schema.orders.customerId))
     .where(and(eq(schema.orders.orderNumber, entry.orderNumber), eq(schema.customers.email, entry.customerEmail)));
   if (!order) throw new Error(`Demo history ${entry.publicId}: order ${entry.orderNumber} not found for ${entry.customerEmail}`);
 
   const items = await tx
-    .select({ id: schema.orderItems.id, sku: schema.orderItems.sku })
+    .select({ id: schema.orderItems.id, sku: schema.orderItems.sku, name: schema.orderItems.name })
     .from(schema.orderItems)
     .where(and(eq(schema.orderItems.orderId, order.id), inArray(schema.orderItems.sku, entry.lines.map((l) => l.sku))));
   const idBySku = new Map(items.map((i) => [i.sku, i.id]));
@@ -120,21 +122,26 @@ async function create(tx: Database, policy: RegisteredPolicy, entry: DemoHistory
 
   if (entry.resolution && evaluation.status === 'ESCALATED') {
     const skuByItem = new Map(items.map((i) => [i.id, i.sku]));
-    const decided = lineRows.map((row) => ({ row, approve: entry.resolution!.approveSkus.includes(skuByItem.get(row.orderItemId)!) }));
-    const approvedAmount = decided.filter((d) => d.approve).reduce((sum, d) => sum + d.row.amountMinor, 0);
-    const approvedCount = decided.filter((d) => d.approve).length;
-    const outcome = approvedCount === 0 ? 'DENIED' : approvedCount === decided.length ? 'APPROVED' : 'PARTIALLY_APPROVED';
+    const nameByItem = new Map(items.map((i) => [i.id, i.name]));
+    const approveSkus = entry.resolution.approveSkus;
+    const decided = lineRows.map((row) => ({ row, approve: approveSkus.includes(skuByItem.get(row.orderItemId)!) }));
+    const resolution = deriveResolution(
+      lineRows.map((row) => ({ id: row.id, amountMinor: row.amountMinor })),
+      decided.map((d) => ({ lineId: d.row.id, approve: d.approve })),
+    )!;
 
     await tx.insert(schema.reviewResolutions).values({
       requestId: request.id,
-      outcome,
-      lineDecisions: decided.map((d) => ({ lineId: d.row.id, approve: d.approve })),
-      approvedAmountMinor: approvedAmount,
+      outcome: resolution.outcome,
+      lineDecisions: resolution.lineDecisions,
+      approvedAmountMinor: resolution.approvedAmountMinor,
       reviewerNote: entry.resolution.note,
-      customerMessage:
-        outcome === 'DENIED'
-          ? 'Our team reviewed your request and could not approve a refund.'
-          : 'Our team reviewed your request and approved a refund.',
+      customerMessage: resolutionCustomerMessage(
+        resolution.outcome,
+        decided.map((d) => ({ itemName: nameByItem.get(d.row.orderItemId)!, approve: d.approve })),
+        resolution.approvedAmountMinor,
+        order.currency,
+      ),
       createdAt: new Date(at.getTime() + entry.resolution.daysAfter * DAY_MS),
     });
     for (const d of decided) {
