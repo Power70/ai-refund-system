@@ -16,6 +16,7 @@ import { CSRF } from './support/sign-in.js';
 import type { TestDatabase } from './support/test-database.js';
 
 const CONVERSATIONS = '/api/v1/customer/conversations';
+const ADMIN = { Authorization: 'Bearer admin-demo-token' };
 
 interface ProposeOptions { reason?: RefundReason; confidence?: number; quote: string }
 
@@ -84,6 +85,9 @@ describe('submitting a claim from chat (e2e)', () => {
     const { request: stored, decision } = await decisionOf(res.body.requestId);
     expect(stored).toMatchObject({ conversationId: chat, reasonOverridden: false, aiProposal: { reason: 'DAMAGED', confidence: 0.98 } });
     expect(decision.gateResult).toMatchObject({ assessment: 'AI', reasons: [] });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const brief = (await request(app.getHttpServer()).get(`/api/v1/admin/refund-requests/${res.body.requestId}`).set(ADMIN).expect(200)).body;
+    expect(brief.aiCalls.map((c: { kind: string }) => c.kind)).toEqual(['CHAT_TURN']);
 
     // The chat is now tied to the request and takes no further claims.
     const view = (await ada.conversation(chat).expect(200)).body;
@@ -104,6 +108,24 @@ describe('submitting a claim from chat (e2e)', () => {
     const { request: stored, decision } = await decisionOf(res.body.requestId);
     expect(stored.reasonOverridden).toBe(true);
     expect(decision.escalationReasons).toEqual(['REASON_OVERRIDDEN']);
+
+    // The reviewer sees the chat, the override and an advisory AI note.
+    const brief = await vi.waitFor(async () => {
+      const { body } = await request(app.getHttpServer()).get(`/api/v1/admin/refund-requests/${res.body.requestId}`).set(ADMIN).expect(200);
+      expect(body.aiSummary).not.toBeNull();
+      return body;
+    });
+    expect(brief.conversation).toMatchObject({ conversationId: chat, mode: 'AI', handoverReason: null, evidenceQuotes: ["don't like the colour"], priorFlaggedConversation: false });
+    expect(brief.conversation.transcript.map((m: { role: string; typed: boolean }) => [m.role, m.typed])).toEqual([['ASSISTANT', false], ['CUSTOMER', true], ['ASSISTANT', false]]);
+    expect(brief.claim).toEqual({
+      proposed: { reason: 'CHANGED_MIND', confidence: 0.98, lines: [{ itemName: 'Polo shirt, green', quantity: 1 }] },
+      confirmed: { reason: 'DAMAGED', lines: [{ itemName: 'Polo shirt, green', quantity: 1 }] },
+      reasonOverridden: true,
+      itemsNotDiscussed: [],
+    });
+    expect(brief.aiSummary).toEqual(fake.summary);
+    expect(brief.aiSummarySuppressed).toBe(false);
+    expect(brief.aiCalls.map((c: { kind: string; outcome: string }) => [c.kind, c.outcome])).toEqual([['CHAT_TURN', 'OK'], ['ADMIN_SUMMARY', 'OK']]);
   });
 
   it('sends the claim to a person when it adds an item the chat never discussed', async () => {
@@ -114,6 +136,8 @@ describe('submitting a claim from chat (e2e)', () => {
 
     const res = await grace.submit({ orderNumber: 'WN-4GK1VS', reason: 'CHANGED_MIND', lines: [{ itemId: grace.itemId('Linen shirt, blue'), quantity: 1 }], conversationId: chat }).expect(201);
     expect((await decisionOf(res.body.requestId)).decision.escalationReasons).toEqual(['ITEM_NOT_DISCUSSED']);
+    const { body } = await request(app.getHttpServer()).get(`/api/v1/admin/refund-requests/${res.body.requestId}`).set(ADMIN).expect(200);
+    expect(body.claim.itemsNotDiscussed).toEqual(['Linen shirt, blue']);
   });
 
   it('sends a low-confidence claim to a person', async () => {
@@ -137,6 +161,8 @@ describe('submitting a claim from chat (e2e)', () => {
     await musa.say(clean, 'The backpack zip broke on day one').expect(200);
     const res = await musa.submit({ orderNumber: 'WN-B4N6ZR', reason: 'DAMAGED', lines: [{ itemId: musa.itemId('Backpack, grey'), quantity: 1 }], conversationId: clean }).expect(201);
     expect((await decisionOf(res.body.requestId)).decision.escalationReasons).toEqual(['PRIOR_FLAGS']);
+    const { body } = await request(app.getHttpServer()).get(`/api/v1/admin/refund-requests/${res.body.requestId}`).set(ADMIN).expect(200);
+    expect(body.conversation).toMatchObject({ priorFlaggedConversation: true, flags: { injectionAttempt: false } });
   });
 
   it('flags within the same chat escalate the claim from it', async () => {
@@ -147,6 +173,15 @@ describe('submitting a claim from chat (e2e)', () => {
 
     const res = await ngozi.submit({ orderNumber: 'WN-2JC8WP', reason: 'DAMAGED', lines: [{ itemId: ngozi.itemId('Tablet 10", 128 GB'), quantity: 1 }], conversationId: chat }).expect(201);
     expect((await decisionOf(res.body.requestId)).decision.escalationReasons).toEqual(['INJECTION_SUSPECTED']);
+
+    // No AI note for a case where the customer tried to steer the model.
+    const brief = await vi.waitFor(async () => {
+      const { body } = await request(app.getHttpServer()).get(`/api/v1/admin/refund-requests/${res.body.requestId}`).set(ADMIN).expect(200);
+      expect(body.aiSummarySuppressed).toBe(true);
+      return body;
+    });
+    expect(brief.aiSummary).toBeNull();
+    expect(brief.conversation.flags.injectionAttempt).toBe(true);
   });
 
   it('treats a chat that fell back to the form after AI failures as AI unavailable', async () => {

@@ -1,7 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { and, eq } from 'drizzle-orm';
+import { LlmService } from '../../ai/llm.service.js';
 import type { Env } from '../../config/env.schema.js';
+import { summarizeCase } from '../../conversations/case-summary.js';
 import { DATABASE } from '../../database/database.tokens.js';
 import type { Database } from '../../database/database.types.js';
 import { pgErrorCode } from '../../database/pg-error-code.js';
@@ -26,6 +28,7 @@ export class RefundSubmissionService {
 
   constructor(
     @Inject(DATABASE) private readonly db: Database,
+    private readonly llm: LlmService,
     config: ConfigService<Env, true>,
   ) {
     this.minConfidence = config.get('AI_MIN_CONFIDENCE', { infer: true });
@@ -59,6 +62,8 @@ export class RefundSubmissionService {
     }
 
     await this.decideSafely(reserved.requestId, reserved.leaseOwner);
+    // Advisory note for reviewers; runs after the response so it never delays the customer.
+    void summarizeCase(this.db, this.llm, reserved.requestId);
     return { kind: 'created', view: (await loadCustomerRequestView(this.db, customerId, { requestId: reserved.requestId }))! };
   }
 

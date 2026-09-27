@@ -4,7 +4,7 @@ import { LlmError, type LlmAdapter, type ToolCallRequest, type ToolCallResult } 
 // An output, an LlmError to throw, or a function of the request.
 type Scripted = unknown;
 
-/** Scripted model: answers the startup probe itself and returns queued outputs for other calls. */
+/** Scripted model: answers the startup probe and case summaries itself; chat turns come from the queue. */
 export class FakeLlm implements LlmAdapter {
   readonly requests: ToolCallRequest[] = [];
   private readonly queue: Scripted[] = [];
@@ -14,8 +14,12 @@ export class FakeLlm implements LlmAdapter {
     return this;
   }
 
+  /** Returned for case-summary calls, which run in the background after submissions. */
+  summary: unknown = { summary: 'Customer reports a problem with the item.', suggestedAction: 'NEEDS_INFO', rationale: 'Details need checking.' };
+
   async callTool(request: ToolCallRequest): Promise<ToolCallResult> {
     if (request.toolName === 'report_ready') return { input: { ready: true } };
+    if (request.toolName === 'record_case_summary') return { input: this.summary, inputTokens: 200, outputTokens: 40 };
     this.requests.push(request);
     const scripted = this.queue.shift();
     if (scripted === undefined) throw new LlmError('unavailable', 'FakeLlm: nothing queued');

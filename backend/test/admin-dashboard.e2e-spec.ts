@@ -124,7 +124,8 @@ describe('admin dashboard API (e2e)', () => {
       const { body } = await request(app.getHttpServer()).get(`${QUEUE}/${created.grace}`).set(ADMIN).expect(200);
       expect(body.customer).toEqual({ name: 'Grace Lee', email: 'grace.lee@example.com' });
       expect(body.order).toMatchObject({ orderNumber: 'WN-4GK1VS', currency: 'USD' });
-      expect(body.request).toMatchObject({ source: 'CUSTOMER', state: 'DECIDED', reasonConfirmed: 'CHANGED_MIND', attempts: 1, aiProposal: null });
+      expect(body.request).toMatchObject({ source: 'CUSTOMER', state: 'DECIDED', reasonConfirmed: 'CHANGED_MIND', attempts: 1 });
+      expect(body).toMatchObject({ conversation: null, aiSummary: null, aiSummarySuppressed: false, claim: { proposed: null, reasonOverridden: false, itemsNotDiscussed: [] } });
       expect(body.lines).toEqual([
         expect.objectContaining({
           itemName: 'Linen shirt, blue', sku: 'SHIRT-LIN-BLU-S', quantity: 1, amountMinor: 8000,
