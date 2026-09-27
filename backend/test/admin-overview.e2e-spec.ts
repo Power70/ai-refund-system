@@ -1,3 +1,5 @@
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type pg from 'pg';
@@ -56,7 +58,7 @@ describe('admin metrics and health (e2e)', () => {
       expect(body.resolutions).toEqual({ approved: 0, partiallyApproved: 0, denied: 1 });
       expect(body.topEscalationReasons).toEqual([{ reason: hassanReason, count: 1 }]);
       expect(body.stuckProcessingCount).toBe(0);
-      expect(body.ai).toEqual({ status: 'disabled', provider: null, model: null });
+      expect(body.ai).toEqual({ status: 'disabled', provider: null, model: null, lastError: null });
       expect(Number.isNaN(Date.parse(body.generatedAt))).toBe(false);
     });
 
@@ -64,7 +66,7 @@ describe('admin metrics and health (e2e)', () => {
       expect(await health()).toMatchObject({
         status: 'ok',
         database: 'ok',
-        ai: { status: 'disabled', provider: null, model: null },
+        ai: { status: 'disabled', provider: null, model: null, lastError: null },
         policyVersion,
         stuckProcessingCount: 0,
       });
@@ -96,5 +98,38 @@ describe('admin metrics and health (e2e)', () => {
     it('health turns degraded while a request is stuck', async () => {
       expect(await health()).toMatchObject({ status: 'degraded', database: 'ok', stuckProcessingCount: 1 });
     });
+  });
+
+  it('with an AI key configured, the startup check runs and health reports the provider', async () => {
+    const seen: { auth?: string; tool?: string }[] = [];
+    const provider = createServer((req, res) => {
+      let data = '';
+      req.on('data', (chunk) => (data += chunk));
+      req.on('end', () => {
+        const body = JSON.parse(data);
+        seen.push({ auth: req.headers.authorization, tool: body.tool_choice?.function?.name });
+        const call = { function: { name: 'report_ready', arguments: JSON.stringify({ ready: true }) } };
+        res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ choices: [{ message: { tool_calls: [call] } }] }));
+      });
+    });
+    await new Promise<void>((resolve) => provider.listen(0, '127.0.0.1', resolve));
+    const saved = { ...process.env };
+    Object.assign(process.env, {
+      LLM_API_KEY: 'local-test-key',
+      LLM_BASE_URL: `http://127.0.0.1:${(provider.address() as AddressInfo).port}/v1`,
+      LLM_MODEL: 'stub-model',
+    });
+    const aiApp = await createTestApp(testDb.url);
+    try {
+      await vi.waitFor(() => expect(seen).toHaveLength(1));
+      expect(seen[0]).toEqual({ auth: 'Bearer local-test-key', tool: 'report_ready' });
+      const body = (await request(aiApp.getHttpServer()).get('/api/v1/admin/health').set(ADMIN).expect(200)).body;
+      expect(body.ai).toEqual({ status: 'ok', provider: 'openai-compatible', model: 'stub-model', lastError: null });
+      expect(JSON.stringify(body)).not.toContain('local-test-key');
+    } finally {
+      await aiApp.close();
+      process.env = saved;
+      await new Promise<void>((resolve) => provider.close(() => resolve()));
+    }
   });
 });

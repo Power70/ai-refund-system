@@ -56,8 +56,8 @@ describe('database schema (e2e, real PostgreSQL)', () => {
       "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name",
     );
     expect(rows.map((r) => r.table_name)).toEqual([
-      'audit_events', 'customers', 'decisions', 'order_items', 'orders', 'policy_versions',
-      'refund_request_lines', 'refund_requests', 'review_resolutions',
+      'ai_calls', 'audit_events', 'conversation_messages', 'conversations', 'customers', 'decisions', 'order_items', 'orders',
+      'policy_versions', 'refund_request_lines', 'refund_requests', 'review_resolutions',
     ]);
   });
 

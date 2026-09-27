@@ -8,3 +8,4 @@ export { refundRequestLines } from './refund-request-lines.table.js';
 export { decisions } from './decisions.table.js';
 export { reviewResolutions } from './review-resolutions.table.js';
 export { auditEvents } from './audit-events.table.js';
+export * from './conversations.table.js';

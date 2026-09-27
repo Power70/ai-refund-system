@@ -3,6 +3,8 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ConfigModule } from '@nestjs/config';
 import { AdminModule } from './admin/admin.module.js';
+import { AiModule } from './ai/ai.module.js';
+import { ConversationsModule } from './conversations/conversations.module.js';
 import { throttlerOptions } from './common/rate-limit/throttler-options.js';
 import { validateEnv } from './config/validate-env.js';
 import { CustomerAuthModule } from './customer-auth/customer-auth.module.js';
@@ -22,12 +24,14 @@ import { RefundsModule } from './refunds/refunds.module.js';
       validate: validateEnv,
     }),
     DatabaseModule,
+    AiModule,
     ThrottlerModule.forRoot(throttlerOptions),
     HealthModule,
     PolicyRegistryModule,
     CustomerAuthModule,
     OrdersModule,
     RefundsModule,
+    ConversationsModule,
     AdminModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Headers, HttpStatus, Inject, NotFoundException, Param, Post, Res, UseGuards } from '@nestjs/common';
 import { ApiAcceptedResponse, ApiConflictResponse, ApiCookieAuth, ApiCreatedResponse, ApiHeader, ApiNotFoundResponse, ApiOkResponse, ApiTags, ApiUnprocessableEntityResponse } from '@nestjs/swagger';
 import type { Response } from 'express';
-import { SubmitRateLimit } from '../../common/rate-limit/submit-rate-limit.decorator.js';
+import { SubmitRateLimit } from '../../common/rate-limit/rate-limit.decorators.js';
 import { CurrentCustomerId } from '../../customer-auth/current-customer-id.decorator.js';
 import { CustomerAuthGuard } from '../../customer-auth/customer-auth.guard.js';
 import { SESSION_COOKIE } from '../../customer-auth/session-cookie.js';

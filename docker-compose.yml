@@ -51,6 +51,11 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:-}
       # Support dashboard token. Empty = the public demo token "admin-demo-token" (with a warning).
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      # Any supported provider key; the provider is detected from its prefix. Empty = AI disabled.
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-}
     # The company refund policy, read-only. Edit policy/refund-policy.yaml, then
     # `docker-compose restart api` registers the new version (no rebuild needed).
     volumes:

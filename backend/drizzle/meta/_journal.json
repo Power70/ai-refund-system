@@ -36,6 +36,13 @@
       "when": 1790541126515,
       "tag": "0004_decision_trace_optional_for_system_failure",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790544748494,
+      "tag": "0005_conversations",
+      "breakpoints": true
     }
   ]
 }

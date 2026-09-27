@@ -1,5 +1,5 @@
-import type { AiStatusReport } from '../../ai/ai-status.types.js';
-import type { AdminHealthDto } from './dto/admin-health.dto.js';
+import type { AiStatusReport } from '../ai/llm.types.js';
+import type { AdminHealthDto } from './admin-overview.dto.js';
 
 export interface HealthProbes {
   databaseReachable: () => Promise<boolean>;
@@ -8,10 +8,7 @@ export interface HealthProbes {
   ai: () => AiStatusReport;
 }
 
-/**
- * Detailed status for admins. Never throws: a failing probe shows up as a value.
- * AI "disabled" is a supported way to run the demo, so it doesn't count as degraded.
- */
+/** Detailed health for admins. Never throws; probe failures are reported as values. */
 export async function checkAdminHealth(probes: HealthProbes, now = new Date()): Promise<AdminHealthDto> {
   const ai = probes.ai();
   const reachable = await probes.databaseReachable();

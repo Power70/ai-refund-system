@@ -1,7 +1,7 @@
 import { Body, Controller, Delete, Get, HttpCode, HttpStatus, NotFoundException, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { ApiCookieAuth, ApiNoContentResponse, ApiNotFoundResponse, ApiOkResponse, ApiTags, ApiTooManyRequestsResponse, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import type { Request, Response } from 'express';
-import { LoginRateLimit } from '../common/rate-limit/login-rate-limit.decorator.js';
+import { LoginRateLimit } from '../common/rate-limit/rate-limit.decorators.js';
 import { CurrentCustomerId } from './current-customer-id.decorator.js';
 import { CustomerAuthGuard } from './customer-auth.guard.js';
 import { CustomerSessionService, SESSION_NOT_FOUND } from './customer-session.service.js';
