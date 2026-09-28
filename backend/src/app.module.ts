@@ -22,6 +22,9 @@ import { RefundsModule } from './refunds/refunds.module.js';
       // never from a file baked into the image.
       ignoreEnvFile: true,
       validate: validateEnv,
+      // Read only validated values. Compose passes unset variables as empty strings, which
+      // validation turns into undefined; without this, ConfigService falls back to those raw strings.
+      skipProcessEnv: true,
     }),
     DatabaseModule,
     AiModule,
