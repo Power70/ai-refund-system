@@ -56,6 +56,9 @@ services:
       LLM_PROVIDER: ${LLM_PROVIDER:-}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_MODEL: ${LLM_MODEL:-}
+      # Per-call AI time limit, and the minimum model confidence for an automatic approval.
+      AI_TIMEOUT_MS: ${AI_TIMEOUT_MS:-20000}
+      AI_MIN_CONFIDENCE: ${AI_MIN_CONFIDENCE:-0.95}
     # The company refund policy, read-only. Edit policy/refund-policy.yaml, then
     # `docker-compose restart api` registers the new version (no rebuild needed).
     volumes:
