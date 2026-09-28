@@ -47,6 +47,12 @@ describe('isSafeCustomerReply and fillPlaceholders', () => {
     expect(fillPlaceholders(text, brief())).toBe('Hi Ada, your refund of $49.99 for Oxford shirt, blue is confirmed.');
   });
 
+  it('collapses a doubled full stop after a quoted reason but keeps ellipses', () => {
+    expect(fillPlaceholders('Sorry, {{customer_first_name}}. Damaged items within 30 days qualify.. Thanks... bye', brief())).toBe(
+      'Sorry, Ada. Damaged items within 30 days qualify. Thanks... bye',
+    );
+  });
+
   it.each([
     ['a missing required placeholder', 'Hi {{customer_first_name}}, all done.', brief()],
     ['a placeholder not allowed for the status', 'Refund of {{approved_amount}} within {{review_eta}}.', brief()],

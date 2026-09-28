@@ -249,6 +249,11 @@ describe('buildTurnPrompt', () => {
     expect(system).not.toMatch(/\$|500|final sale/i);
   });
 
+  it('lists each reason with its label and what it covers', () => {
+    expect(user).toContain('WRONG_ITEM: "I received the wrong item" (a different product from the one ordered, or the wrong size, colour or variant)');
+    expect(user).toContain('NOT_AS_DESCRIBED: "It\'s not as described" (the right product');
+  });
+
   it('says when there are no earlier requests', () => {
     expect(buildTurnPrompt({ ...context, earlierRequests: [] }).user).toContain('<earlier_requests>\nnone\n</earlier_requests>');
   });

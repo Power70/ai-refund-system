@@ -157,7 +157,8 @@ export function isSafeCustomerReply(text: string, brief: DecisionBrief, factsTex
 
 export function fillPlaceholders(text: string, brief: DecisionBrief): string {
   const values = placeholderValues(brief);
-  return text.replace(/\{\{\s*([a-z_]+)\s*\}\}/g, (_, name: Placeholder) => values[name]);
+  // Quoted reasons end with a full stop, so models often add a second one.
+  return text.replace(/\{\{\s*([a-z_]+)\s*\}\}/g, (_, name: Placeholder) => values[name]).replace(/(?<!\.)\.\.(?!\.)/g, '.');
 }
 
 const decisionReplySchema = z.object({ message: z.string().trim().min(1).max(MAX_CUSTOMER_REPLY_CHARS) }).strict();
