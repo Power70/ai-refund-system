@@ -139,6 +139,23 @@ describe('planDecision', () => {
     expect(plan.brief.items[0]).toMatchObject({ refunded: true, quantity: 1 });
   });
 
+  it.each([
+    ['an approval', lineFacts(), 'APPROVED'],
+    ['a denial', lineFacts({ 'item.daysSinceDelivery': 90 }), 'DENIED'],
+  ])('sends %s for an order in another currency to a person', (_label, facts, policyStatus) => {
+    const assessed = request({
+      claimContext: { conversationId: 'c1', handoverReason: null, discussedItemIds: ['item-1'], flags: null, priorFlaggedConversation: false },
+      aiProposal: { orderId: 'o1', orderNumber: 'WN-7K3P9Q', reason: 'DAMAGED', lines: [], evidenceQuotes: ['it arrived torn'], confidence: 0.99 },
+    });
+    const plan = planDecision(
+      input({ request: assessed, currency: 'EUR', facts: { lines: [{ lineId: 'item-1', amountMinor: 4999, facts }], history: { 'order.refundedOrPendingMinor': 0, 'customer.requestsLast30Days': 0 } } }),
+    );
+    expect(plan.evaluation.status).toBe(policyStatus);
+    expect(plan.gate).toEqual({ status: 'ESCALATED', reasons: ['CURRENCY_MISMATCH'] });
+    expect(plan.approvedAmountMinor).toBe(0);
+    expect(plan.statuses.get('item-1')).toBe('UNDER_REVIEW');
+  });
+
   it('passes a policy denial through with its customer-facing reason', () => {
     const plan = planDecision(input({ facts: { ...input().facts, lines: [{ lineId: 'item-1', amountMinor: 4999, facts: lineFacts({ 'item.daysSinceDelivery': 45 }) }] } }));
     expect(plan.gate).toEqual({ status: 'DENIED', reasons: [] });

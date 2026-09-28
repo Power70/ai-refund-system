@@ -188,6 +188,8 @@ The AI has three jobs, none of which can approve money:
 - no injection attempt, mention of another customer's order or abuse was flagged, in this chat or the customer's chats of the last 30 days (`INJECTION_SUSPECTED`, `OTHER_CUSTOMER_ORDER_MENTIONED`, `ABUSIVE`, `PRIOR_FLAGS`);
 - the model's confidence is at least `AI_MIN_CONFIDENCE` (`LOW_CONFIDENCE`).
 
+The policy's money thresholds are in its declared `currency`. An order in any other currency skips the automatic outcome, approval or denial, and goes to a person (`CURRENCY_MISMATCH`).
+
 Claims filled in on the form are always reviewed (`NO_AI_ASSESSMENT`, or `AI_UNAVAILABLE` when the AI was down). Self-reported confidence is not a calibrated probability, so it is only ever an extra reason to escalate.
 
 With any key, or none, the system stays available and safe. The automatic-approval rate depends on model quality: a weaker model produces more escalations, not wrong decisions.

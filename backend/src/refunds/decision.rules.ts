@@ -42,7 +42,9 @@ export type GateReason =
   | 'OTHER_CUSTOMER_ORDER_MENTIONED'
   | 'ABUSIVE'
   | 'PRIOR_FLAGS'
-  | 'LOW_CONFIDENCE';
+  | 'LOW_CONFIDENCE'
+  /** The order is not in the policy's currency, so money thresholds cannot be compared (set by `planDecision`). */
+  | 'CURRENCY_MISMATCH';
 
 export interface GateResult {
   status: PolicyStatus;
@@ -156,21 +158,26 @@ export interface DecisionPlan {
 }
 
 /**
- * Policy engine, then safety gate, from stored inputs only: the first attempt, a retry and
+ * Policy engine, then safety gate (or escalation when the order's currency differs from the
+ * policy's), from stored inputs only: the first attempt, a retry and
  * the sweeper reach the same decision for the same request.
  */
 export function planDecision(input: DecisionInput): DecisionPlan {
   const { request, lines, policy } = input;
   const evaluation = evaluateRequest(policy.document, input.facts.lines, input.facts.history);
   const assessment = assessmentForRequest(request);
-  const gate = applySafetyGate({
-    policyStatus: evaluation.status,
-    confirmedReason: request.reasonConfirmed,
-    confirmedItemIds: lines.map((l) => l.orderItemId),
-    assessment,
-    priorFlaggedConversation: request.claimContext?.priorFlaggedConversation ?? false,
-    minConfidence: input.minConfidence,
-  });
+  // Thresholds are in the policy's currency: any other currency goes to a person, whatever the outcome.
+  const gate: GateResult =
+    input.currency === policy.document.currency
+      ? applySafetyGate({
+          policyStatus: evaluation.status,
+          confirmedReason: request.reasonConfirmed,
+          confirmedItemIds: lines.map((l) => l.orderItemId),
+          assessment,
+          priorFlaggedConversation: request.claimContext?.priorFlaggedConversation ?? false,
+          minConfidence: input.minConfidence,
+        })
+      : { status: 'ESCALATED', reasons: ['CURRENCY_MISMATCH'] };
   const statuses = finalLineStatuses(evaluation, gate.status);
   const approvedAmountMinor = gate.status === 'APPROVED' ? evaluation.approvedAmountMinor : 0;
   const quantityOf = new Map(lines.map((l) => [l.orderItemId, l.quantity]));

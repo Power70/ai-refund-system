@@ -71,6 +71,25 @@ describe('refund submission (e2e)', () => {
     expect(again.body.code).toBe('ALREADY_IN_PROGRESS');
   });
 
+  it('sends an order in another currency to a person, even when the policy would deny it', async () => {
+    const [femi] = await db.select().from(schema.customers).where(eq(schema.customers.email, 'femi.johnson@example.com'));
+    const deliveredAt = new Date(Date.now() - 45 * 86_400_000);
+    const [order] = await db
+      .insert(schema.orders)
+      .values({ orderNumber: 'WN-EUR45D', customerId: femi.id, currency: 'EUR', placedAt: new Date(deliveredAt.getTime() - 3 * 86_400_000), deliveredAt })
+      .returning();
+    await db.insert(schema.orderItems).values({ orderId: order.id, sku: 'EU-LAMP-1', name: 'Table lamp', category: 'HOME', unitPricePaidMinor: 4500, quantity: 1, finalSale: false });
+
+    const client = await customerClient(app, 'femi.johnson@example.com', 'WN-EUR45D');
+    const res = await client.submit({ orderNumber: 'WN-EUR45D', reason: 'DAMAGED', lines: [{ itemId: client.itemId('Table lamp'), quantity: 1 }] }).expect(201);
+    expect(res.body).toMatchObject({ status: 'ESCALATED', approvedAmountMinor: 0, lines: [{ outcome: 'UNDER_REVIEW' }] });
+
+    const { decision, lines } = await stored(res.body.requestId);
+    expect(decision).toMatchObject({ status: 'ESCALATED', escalationReasons: ['CURRENCY_MISMATCH'] });
+    expect(decision.gateResult).toMatchObject({ policyStatus: 'DENIED', status: 'ESCALATED', reasons: ['CURRENCY_MISMATCH'] });
+    expect(lines).toMatchObject([{ lineOutcome: 'DENY', finalLineStatus: 'UNDER_REVIEW' }]);
+  });
+
   it('never exposes internal decision data to the customer', async () => {
     const hassan = await customerClient(app, 'hassan.bello@example.com', 'WN-Z2T5HM');
     const res = await hassan.submit({ orderNumber: 'WN-Z2T5HM', reason: 'DAMAGED', lines: [{ itemId: hassan.itemId('Over-ear headphones'), quantity: 1 }] }).expect(201);
