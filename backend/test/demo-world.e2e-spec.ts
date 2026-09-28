@@ -1,19 +1,18 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
-import { readFileSync } from 'node:fs';
 import type pg from 'pg';
-import { createPgPool, type Database } from '../src/database/database.js';
+import { createPgPool, type Database } from '../src/database/database.providers.js';
 import { runMigrations } from '../src/database/run-migrations.js';
 import * as schema from '../src/database/schema.js';
 import { DEMO_HISTORY } from '../src/database/seed/demo-data.js';
 import { seedDemoCatalog, seedDemoHistory } from '../src/database/seed/seed.js';
 import { evaluateRequest } from '../src/policy/policy-engine.js';
-import { findActivePolicy, registerPolicyVersion, type RegisteredPolicy } from '../src/policy/policy-registry.js';
-import { parsePolicy, type RefundReason } from '../src/policy/policy-schema.js';
-import { buildRequestFacts } from '../src/refunds/refund-facts.js';
+import type { RegisteredPolicy } from '../src/policy/policy.service.js';
+import type { RefundReason } from '../src/policy/policy-schema.js';
+import { RequestFactsService } from '../src/refunds/request-facts.service.js';
+import { policyService } from './support/policy-fixtures.js';
 import { demoOrder, requestByPublicId, createTestDatabase, type TestDatabase } from './support/test-app.js';
 
 const DAY_MS = 86_400_000;
-const realPolicy = parsePolicy(readFileSync(new URL('../../policy/refund-policy.yaml', import.meta.url), 'utf8'));
 
 /**
  * The whole demo world, end to end: catalog + real policy + seeded history, then every
@@ -32,8 +31,9 @@ describe('demo world (e2e, real PostgreSQL)', () => {
     pool = createPgPool(testDb.url);
     db = drizzle(pool, { schema });
     await seedDemoCatalog(db, now);
-    await registerPolicyVersion(db, realPolicy);
-    policy = await findActivePolicy(db, now);
+    const policies = policyService(db);
+    await policies.registerPolicyFile();
+    policy = await policies.activePolicy(now);
     await seedDemoHistory(db, policy, now);
   });
 
@@ -94,7 +94,7 @@ describe('demo world (e2e, real PostgreSQL)', () => {
 
     it.each(scenarios)('%s', async (_name, orderNumber, skus, reason, expected, escalation) => {
       const order = await demoOrder(db, orderNumber, skus);
-      const facts = await buildRequestFacts(db, {
+      const facts = await new RequestFactsService(db).build({
         customerId: order.customerId, orderId: order.orderId, reason, at: now,
         lines: order.itemIds.map((orderItemId) => ({ orderItemId, quantity: 1 })),
       });
@@ -105,7 +105,7 @@ describe('demo world (e2e, real PostgreSQL)', () => {
 
     it('#11 Kemi: only the shirt is refunded', async () => {
       const order = await demoOrder(db, 'WN-3VH9TL', ['SHIRT-POL-GRN-M', 'BELT-CNV-NVY']);
-      const facts = await buildRequestFacts(db, {
+      const facts = await new RequestFactsService(db).build({
         customerId: order.customerId, orderId: order.orderId, reason: 'CHANGED_MIND', at: now,
         lines: order.itemIds.map((orderItemId) => ({ orderItemId, quantity: 1 })),
       });

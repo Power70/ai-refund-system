@@ -3,10 +3,10 @@ import { asc, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type pg from 'pg';
 import request from 'supertest';
-import { createPgPool, type Database } from '../src/database/database.js';
+import { createPgPool, type Database } from '../src/database/database.providers.js';
 import * as schema from '../src/database/schema.js';
-import { generatePublicRequestId } from '../src/refunds/refund-requests.js';
-import { computePayloadHash } from '../src/refunds/refund-submission.service.js';
+import { generatePublicRequestId } from '../src/common/validation.js';
+import { computePayloadHash } from '../src/refunds/refunds.service.js';
 import { createTestApp } from './create-test-app.js';
 import { customerClient, demoOrder, prepareDemoDatabase, CSRF, type TestDatabase } from './support/test-app.js';
 

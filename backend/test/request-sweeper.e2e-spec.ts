@@ -1,23 +1,35 @@
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { asc, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type pg from 'pg';
-import { createPgPool, pgErrorCode, type Database } from '../src/database/database.js';
+import { createPgPool, pgErrorCode, type Database } from '../src/database/database.providers.js';
 import * as schema from '../src/database/schema.js';
-import { decideRequest } from '../src/refunds/decide-request.js';
-import { SYSTEM_FAILURE_CUSTOMER_MESSAGE } from '../src/refunds/refund-messages.js';
-import { loadCustomerRequestView, reclaimExpiredLease } from '../src/refunds/refund-requests.js';
-import { countStuckRequests, sweepStuckRequests } from '../src/refunds/request-sweeper.js';
-import { createTestApp } from './create-test-app.js';
+import { HealthService } from '../src/health/health.service.js';
+import { SYSTEM_FAILURE_CUSTOMER_MESSAGE } from '../src/refunds/customer-messages.service.js';
+import { DecisionService } from '../src/refunds/decision.service.js';
+import { RefundsService } from '../src/refunds/refunds.service.js';
+import { SweeperService } from '../src/refunds/sweeper.service.js';
+import { createTestApp, type TestAppOptions } from './create-test-app.js';
 import { prepareDemoDatabase, strandedRequest, type TestDatabase } from './support/test-app.js';
 
 const EXPIRED = () => new Date(Date.now() - 1_000);
 const LIVE = () => new Date(Date.now() + 60_000);
-const opts = { minConfidence: 0.95 };
 
-async function openDemo() {
+/** A demo database, the app's services wired against it, and a direct connection for assertions. */
+async function openDemo(options: TestAppOptions = {}) {
   const testDb = await prepareDemoDatabase();
+  const app = await createTestApp(testDb.url, options);
   const pool = createPgPool(testDb.url);
-  return { testDb, pool, db: drizzle(pool, { schema }) as Database };
+  return {
+    testDb,
+    app,
+    pool,
+    db: drizzle(pool, { schema }) as Database,
+    sweeper: app.get(SweeperService),
+    decisions: app.get(DecisionService),
+    refunds: app.get(RefundsService),
+    health: app.get(HealthService),
+  };
 }
 
 async function stateOf(db: Database, id: string) {
@@ -30,18 +42,24 @@ async function stateOf(db: Database, id: string) {
 
 describe('request sweeper (e2e, real PostgreSQL)', () => {
   let testDb: TestDatabase;
+  let app: NestExpressApplication;
   let pool: pg.Pool;
   let db: Database;
+  let sweeper: SweeperService;
+  let decisions: DecisionService;
+  let refunds: RefundsService;
+  let health: HealthService;
 
-  beforeAll(async () => ({ testDb, pool, db } = await openDemo()));
+  beforeAll(async () => ({ testDb, app, pool, db, sweeper, decisions, refunds, health } = await openDemo()));
   afterAll(async () => {
+    await app?.close();
     await pool?.end();
     await testDb?.drop();
   });
 
   it('finishes a request whose worker died, with the normal decision', async () => {
     const stuck = await strandedRequest(db, { orderNumber: 'WN-Q4M1ZT', sku: 'LAMP-DSK-BLK', reason: 'DAMAGED', leaseExpiresAt: EXPIRED() });
-    const result = await sweepStuckRequests(db, opts);
+    const result = await sweeper.sweepOnce();
     expect(result).toMatchObject({ found: 1, decided: 1, escalated: 0 });
 
     const { request, decisions, lines, audit } = await stateOf(db, stuck.id);
@@ -54,13 +72,13 @@ describe('request sweeper (e2e, real PostgreSQL)', () => {
 
   it('leaves a request alone while its worker still holds the lease', async () => {
     const busy = await strandedRequest(db, { orderNumber: 'WN-7K3P9Q', sku: 'SHIRT-OXF-BLU-M', reason: 'DAMAGED', leaseExpiresAt: LIVE() });
-    expect((await sweepStuckRequests(db, opts)).found).toBe(0);
+    expect((await sweeper.sweepOnce()).found).toBe(0);
     expect((await stateOf(db, busy.id)).request).toMatchObject({ state: 'PROCESSING', leaseOwner: 'dead-worker', attemptCount: 1 });
   });
 
   it('hands a request to a person after 3 failed attempts', async () => {
     const worn = await strandedRequest(db, { orderNumber: 'WN-2JC8WP', sku: 'TABLET-10-128', reason: 'DAMAGED', leaseExpiresAt: EXPIRED(), attemptCount: 3 });
-    expect(await sweepStuckRequests(db, opts)).toMatchObject({ found: 1, escalated: 1, decided: 0 });
+    expect(await sweeper.sweepOnce()).toMatchObject({ found: 1, escalated: 1, decided: 0 });
 
     const { request, decisions, lines, audit } = await stateOf(db, worn.id);
     expect(request.state).toBe('DECIDED');
@@ -68,13 +86,13 @@ describe('request sweeper (e2e, real PostgreSQL)', () => {
     expect(lines[0].finalLineStatus).toBe('UNDER_REVIEW'); // stays reserved for the reviewer
     expect(audit).toEqual(['PROCESSING_RESUMED', 'SYSTEM_PROCESSING_FAILED', 'DECISION_RECORDED']);
 
-    const view = await loadCustomerRequestView(db, request.customerId, { requestId: request.id });
+    const view = await refunds.view(request.customerId, { requestId: request.id });
     expect(view).toMatchObject({ status: 'ESCALATED', customerMessage: SYSTEM_FAILURE_CUSTOMER_MESSAGE });
   });
 
   it('decides each request exactly once when several sweepers run at the same time', async () => {
     const stuck = await strandedRequest(db, { orderNumber: 'WN-7XW2QD', sku: 'BOTTLE-STL-750', reason: 'DAMAGED', leaseExpiresAt: EXPIRED() });
-    const results = await Promise.all([sweepStuckRequests(db, opts), sweepStuckRequests(db, opts), sweepStuckRequests(db, opts)]);
+    const results = await Promise.all([sweeper.sweepOnce(), sweeper.sweepOnce(), sweeper.sweepOnce()]);
     expect(results.reduce((n, r) => n + r.decided, 0)).toBe(1);
     const { decisions, audit } = await stateOf(db, stuck.id);
     expect(decisions).toHaveLength(1);
@@ -83,8 +101,8 @@ describe('request sweeper (e2e, real PostgreSQL)', () => {
 
   it('lets only one caller take over an expired lease (retry vs sweeper, sweeper vs sweeper)', async () => {
     const stuck = await strandedRequest(db, { orderNumber: 'WN-3VH9TL', sku: 'SHIRT-POL-GRN-M', reason: 'CHANGED_MIND', leaseExpiresAt: EXPIRED() });
-    const first = await reclaimExpiredLease(db, stuck.id);
-    const second = await reclaimExpiredLease(db, stuck.id); // the lease was just renewed: nothing to take
+    const first = await decisions.reclaimExpiredLease(stuck.id);
+    const second = await decisions.reclaimExpiredLease(stuck.id); // the lease was just renewed: nothing to take
     expect(first).not.toBeNull();
     expect(second).toBeNull();
     expect((await stateOf(db, stuck.id)).request).toMatchObject({ leaseOwner: first, attemptCount: 2 });
@@ -92,21 +110,21 @@ describe('request sweeper (e2e, real PostgreSQL)', () => {
 
   it('a worker whose lease was taken over cannot save a decision', async () => {
     const stuck = await strandedRequest(db, { orderNumber: 'WN-H9F3LX', sku: 'KETTLE-ELC-1L', reason: 'DAMAGED', leaseExpiresAt: EXPIRED() });
-    const newOwner = await reclaimExpiredLease(db, stuck.id);
+    const newOwner = await decisions.reclaimExpiredLease(stuck.id);
     expect(newOwner).not.toBeNull();
     // The original worker ('dead-worker') wakes up and tries to finish: refused, nothing written.
-    expect(await decideRequest(db, stuck.id, 'dead-worker', opts)).toBe(false);
+    expect(await decisions.decide(stuck.id, 'dead-worker')).toBe(false);
     expect((await stateOf(db, stuck.id)).decisions).toHaveLength(0);
     // The current owner can.
-    expect(await decideRequest(db, stuck.id, newOwner!, opts)).toBe(true);
+    expect(await decisions.decide(stuck.id, newOwner!)).toBe(true);
     expect((await stateOf(db, stuck.id)).decisions).toHaveLength(1);
   });
 
   it('counts stuck requests (the health signal) and reaches zero after a sweep', async () => {
     await strandedRequest(db, { orderNumber: 'WN-B4N6ZR', sku: 'BAG-BPK-GRY', reason: 'DAMAGED', leaseExpiresAt: EXPIRED() });
-    expect(await countStuckRequests(db)).toBe(1);
-    await sweepStuckRequests(db, opts);
-    expect(await countStuckRequests(db)).toBe(0);
+    expect(await health.countStuckRequests()).toBe(1);
+    await sweeper.sweepOnce();
+    expect(await health.countStuckRequests()).toBe(0);
   });
 
   it('the database refuses a decision without a rule trace unless it is a system-failure escalation', async () => {
@@ -126,11 +144,14 @@ describe('request sweeper (e2e, real PostgreSQL)', () => {
 
 describe('request sweeper when deciding keeps failing (e2e)', () => {
   let testDb: TestDatabase;
+  let app: NestExpressApplication;
   let pool: pg.Pool;
   let db: Database;
+  let sweeper: SweeperService;
 
-  beforeAll(async () => ({ testDb, pool, db } = await openDemo()));
+  beforeAll(async () => ({ testDb, app, pool, db, sweeper } = await openDemo()));
   afterAll(async () => {
+    await app?.close();
     await pool?.end();
     await testDb?.drop();
   });
@@ -141,10 +162,10 @@ describe('request sweeper when deciding keeps failing (e2e)', () => {
     await pool.query("UPDATE policy_versions SET content = jsonb_set(content, '{defaultOutcome}', '\"ALLOW\"')");
 
     const later = (minutes: number) => new Date(Date.now() + minutes * 60_000);
-    expect(await sweepStuckRequests(db, { ...opts, now: later(0) })).toMatchObject({ found: 1, retryLater: 1 }); // attempt 2 fails
-    expect(await sweepStuckRequests(db, { ...opts, now: later(0) })).toMatchObject({ found: 0 }); // new lease still valid
-    expect(await sweepStuckRequests(db, { ...opts, now: later(2) })).toMatchObject({ found: 1, retryLater: 1 }); // attempt 3 fails
-    expect(await sweepStuckRequests(db, { ...opts, now: later(4) })).toMatchObject({ found: 1, escalated: 1 }); // a person takes it
+    expect(await sweeper.sweepOnce(later(0))).toMatchObject({ found: 1, retryLater: 1 }); // attempt 2 fails
+    expect(await sweeper.sweepOnce(later(0))).toMatchObject({ found: 0 }); // new lease still valid
+    expect(await sweeper.sweepOnce(later(2))).toMatchObject({ found: 1, retryLater: 1 }); // attempt 3 fails
+    expect(await sweeper.sweepOnce(later(4))).toMatchObject({ found: 1, escalated: 1 }); // a person takes it
 
     const { request, decisions } = await stateOf(db, stuck.id);
     expect(request).toMatchObject({ state: 'DECIDED', attemptCount: 4 });
@@ -154,8 +175,7 @@ describe('request sweeper when deciding keeps failing (e2e)', () => {
 
 describe('background sweeper in the running API (e2e)', () => {
   it('picks up a stuck request on its own', async () => {
-    const { testDb, pool, db } = await openDemo();
-    const app = await createTestApp(testDb.url, { sweeperIntervalMs: 100 });
+    const { testDb, app, pool, db } = await openDemo({ sweeperIntervalMs: 100 });
     try {
       const stuck = await strandedRequest(db, { orderNumber: 'WN-K5R2BW', sku: 'SPEAKER-BT-MINI', reason: 'DAMAGED', leaseExpiresAt: EXPIRED() });
       const deadline = Date.now() + 5_000;

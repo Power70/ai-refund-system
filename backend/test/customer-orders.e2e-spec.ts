@@ -2,9 +2,9 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import request from 'supertest';
-import { createPgPool } from '../src/database/database.js';
+import { createPgPool } from '../src/database/database.providers.js';
 import * as schema from '../src/database/schema.js';
-import { generatePublicRequestId } from '../src/refunds/refund-requests.js';
+import { generatePublicRequestId } from '../src/common/validation.js';
 import { createTestApp } from './create-test-app.js';
 import { demoOrder, prepareDemoDatabase, signIn, type TestDatabase } from './support/test-app.js';
 

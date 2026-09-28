@@ -6,7 +6,7 @@ import pg from 'pg';
 import { stringify } from 'yaml';
 import { runMigrations } from '../src/database/run-migrations.js';
 import * as schema from '../src/database/schema.js';
-import { NoActivePolicyError, PolicyRegistrationError } from '../src/policy/policy-registry.js';
+import { NoActivePolicyError, PolicyRegistrationError } from '../src/policy/policy.service.js';
 import { PolicyValidationError } from '../src/policy/policy-schema.js';
 import { createTestApp } from './create-test-app.js';
 import { policyDocument } from './support/policy-fixtures.js';

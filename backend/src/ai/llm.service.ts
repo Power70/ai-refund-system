@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import { z } from 'zod';
+import type { aiCalls } from '../database/schema.js';
 import { acceptsTemperature, type LlmConfigResult } from './llm-providers.js';
 import { LlmError, type AiStatusReport, type LlmAdapter, type LlmErrorKind, type StructuredResult } from './llm.types.js';
 
@@ -18,6 +19,12 @@ export interface StructuredRequest<T> {
   user: string;
   schema: z.ZodType<T>;
 }
+
+/** The provider-facing fields of an `ai_calls` row. */
+export type AiCallRecord = Pick<
+  typeof aiCalls.$inferInsert,
+  'provider' | 'model' | 'outcome' | 'attempts' | 'latencyMs' | 'validatedOutput' | 'failureReason' | 'inputTokens' | 'outputTokens'
+>;
 
 const probeSchema = z.object({ ready: z.literal(true) }).strict();
 
@@ -127,6 +134,14 @@ export class LlmService implements OnApplicationBootstrap {
     }
   }
 
+  /** Maps a structured result to an `ai_calls` record. `failureReason` annotates a valid output that was not used. */
+  callRecord(result: StructuredResult<unknown>, failureReason: string | null = null): AiCallRecord {
+    const { provider, model } = this.status;
+    const base = { provider, model, attempts: result.attempts, latencyMs: result.latencyMs };
+    if (!result.ok) return { ...base, outcome: callOutcome(result.reason), failureReason: result.reason };
+    return { ...base, outcome: 'OK', validatedOutput: result.value, failureReason, inputTokens: result.inputTokens, outputTokens: result.outputTokens };
+  }
+
   private recordSuccess(): void {
     this.status = { ...this.status, status: 'ok', lastError: null };
   }
@@ -138,6 +153,13 @@ export class LlmService implements OnApplicationBootstrap {
     this.status = { ...this.status, status: reason === 'invalid_output' ? this.status.status : 'degraded', lastError: reason };
     return { ok: false, reason, attempts, latencyMs: Date.now() - started };
   }
+}
+
+function callOutcome(reason: string): AiCallRecord['outcome'] {
+  if (reason === 'invalid_output') return 'INVALID';
+  if (reason === 'timeout') return 'TIMEOUT';
+  if (reason === 'disabled') return 'SKIPPED';
+  return 'ERROR';
 }
 
 function toToolParameters(schema: z.ZodType): Record<string, unknown> {

@@ -2,7 +2,7 @@ import { sql } from 'drizzle-orm';
 import { pgEnum, check, pgTable, text, timestamp, uuid, char, index, unique, boolean, integer, uniqueIndex, jsonb, foreignKey } from 'drizzle-orm/pg-core';
 import type { RequestEvaluation } from '../policy/policy-engine.js';
 import { POLICY_OUTCOMES, REFUND_REASONS, type PolicyDocument } from '../policy/policy-schema.js';
-import type { ClaimContext } from '../refunds/decide-request.js';
+import type { ClaimContext } from '../refunds/decision.rules.js';
 
 export const refundReasonEnum = pgEnum('refund_reason', REFUND_REASONS);
 /** PROCESSING while a worker holds the lease; DECIDED once a decision is stored. */
@@ -14,6 +14,7 @@ export const lineStatusEnum = pgEnum('line_status', ['REFUNDED', 'NOT_REFUNDED',
 export const decisionStatusEnum = pgEnum('decision_status', ['APPROVED', 'DENIED', 'ESCALATED']);
 export const messageSourceEnum = pgEnum('message_source', ['AI', 'TEMPLATE']);
 export const resolutionOutcomeEnum = pgEnum('resolution_outcome', ['APPROVED', 'PARTIALLY_APPROVED', 'DENIED']);
+export type ResolutionOutcome = (typeof resolutionOutcomeEnum.enumValues)[number];
 export const auditActorEnum = pgEnum('audit_actor', ['SYSTEM', 'AI', 'ADMIN', 'CUSTOMER']);
 
 export const customers = pgTable(

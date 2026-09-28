@@ -1,13 +1,12 @@
 import { eq, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type pg from 'pg';
-import { createPgPool, pgErrorCode, type Database } from '../src/database/database.js';
+import { createPgPool, pgErrorCode, type Database } from '../src/database/database.providers.js';
 import { runMigrations } from '../src/database/run-migrations.js';
 import * as schema from '../src/database/schema.js';
 import { seedDemoCatalog } from '../src/database/seed/seed.js';
-import { registerPolicyVersion } from '../src/policy/policy-registry.js';
-import { generatePublicRequestId } from '../src/refunds/refund-requests.js';
-import { policyDocument } from './support/policy-fixtures.js';
+import { generatePublicRequestId } from '../src/common/validation.js';
+import { policyDocument, policyService } from './support/policy-fixtures.js';
 import { createTestDatabase, type TestDatabase } from './support/test-app.js';
 
 const CHECK = '23514';
@@ -32,7 +31,7 @@ describe('refund request schema (e2e, real PostgreSQL)', () => {
     pool = createPgPool(testDb.url);
     db = drizzle(pool, { schema });
     await seedDemoCatalog(db, new Date());
-    policyVersionId = (await registerPolicyVersion(db, policyDocument('v1', '2026-01-01T00:00:00Z'))).policy.id;
+    policyVersionId = (await policyService(db).register(policyDocument('v1', '2026-01-01T00:00:00Z'))).policy.id;
     ada = await customerWithItem('ada.okafor@example.com', 'WN-7K3P9Q');
     ben = await customerWithItem('ben.carter@example.com', 'WN-Q4M1ZT');
   });

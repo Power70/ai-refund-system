@@ -1,5 +1,6 @@
 import { SetMetadata, type ExecutionContext } from '@nestjs/common';
 import type { ThrottlerModuleOptions } from '@nestjs/throttler';
+import { SESSION_COOKIE, unverifiedSessionSubject } from '../auth/session-token.js';
 
 export const LOGIN_RATE_LIMIT = 'rateLimit:login';
 export const SUBMIT_RATE_LIMIT = 'rateLimit:submit';
@@ -12,23 +13,10 @@ export const SubmitRateLimit = () => SetMetadata(SUBMIT_RATE_LIMIT, true);
 /** Chat messages (each may cost an AI call): 20 per minute per customer. */
 export const ChatRateLimit = () => SetMetadata(CHAT_RATE_LIMIT, true);
 
-/**
- * Rate-limit key for signed-in routes: the customer id read from the session cookie
- * WITHOUT verifying it. That is safe for counting: a forged cookie only lands in its own
- * bucket and is then rejected by CustomerAuthGuard; a real customer is always counted as themselves.
- */
+/** Rate-limit key for signed-in routes: the session subject, falling back to the client IP. */
 export function customerTracker(req: Record<string, any>): string {
-  const token = (req.cookies as Record<string, string> | undefined)?.rs_session;
-  const body = typeof token === 'string' ? token.split('.')[0] : undefined;
-  if (body) {
-    try {
-      const sub = (JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as { sub?: unknown }).sub;
-      if (typeof sub === 'string' && sub.length <= 64) return `customer:${sub}`;
-    } catch {
-      // fall through to the IP
-    }
-  }
-  return `ip:${String(req.ip)}`;
+  const sub = unverifiedSessionSubject((req.cookies as Record<string, string> | undefined)?.[SESSION_COOKIE]);
+  return sub ? `customer:${sub}` : `ip:${String(req.ip)}`;
 }
 
 /**
@@ -66,7 +54,7 @@ const marked = (key: string) => (context: ExecutionContext): boolean => Reflect.
 
 /**
  * api: all routes, per IP. login-ip: sign-ins per IP. submit and chat: per customer.
- * Failed sign-ins per email are limited by FailedLoginLimiter.
+ * Failed sign-ins per email and wrong admin tokens per IP are limited in AuthService.
  * In-memory storage suits a single instance; multiple instances would need shared storage (e.g. Redis).
  */
 export const throttlerOptions: ThrottlerModuleOptions = {

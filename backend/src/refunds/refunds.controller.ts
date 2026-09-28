@@ -1,26 +1,34 @@
-import { Body, Controller, Get, Headers, HttpStatus, Inject, NotFoundException, Param, Post, Res, UseGuards } from '@nestjs/common';
-import { ApiAcceptedResponse, ApiConflictResponse, ApiCookieAuth, ApiCreatedResponse, ApiHeader, ApiNotFoundResponse, ApiOkResponse, ApiTags, ApiUnprocessableEntityResponse } from '@nestjs/swagger';
+import { Body, Controller, Get, Headers, HttpStatus, NotFoundException, Param, Post, Res, UseGuards } from '@nestjs/common';
+import {
+  ApiAcceptedResponse,
+  ApiConflictResponse,
+  ApiCookieAuth,
+  ApiCreatedResponse,
+  ApiHeader,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiTags,
+  ApiUnauthorizedResponse,
+  ApiUnprocessableEntityResponse,
+} from '@nestjs/swagger';
 import type { Response } from 'express';
+import { CurrentCustomerId } from '../auth/decorators/current-customer.decorator.js';
+import { CustomerAuthGuard } from '../auth/guards/customer-auth.guard.js';
+import { SESSION_COOKIE } from '../auth/session-token.js';
 import { SubmitRateLimit } from '../common/rate-limit.js';
-import { CurrentCustomerId, CustomerAuthGuard, SESSION_COOKIE } from '../customer-auth/customer-auth.js';
-import { DATABASE, type Database } from '../database/database.js';
-import { listCustomerRequests, loadCustomerRequestView } from './refund-requests.js';
-import { RefundSubmissionService } from './refund-submission.service.js';
-import { CustomerRequestViewDto, SubmitRefundRequestDto } from './refunds.dto.js';
-
-const PUBLIC_ID = /^rr_[0-9a-hjkmnp-tv-z]{12}$/;
+import { ParsePublicRequestIdPipe } from '../common/validation.js';
+import { CustomerRequestViewDto, SubmitRefundRequestDto } from './dto/refunds.dto.js';
+import { RefundsService } from './refunds.service.js';
 
 @ApiTags('customer refund requests')
 @ApiCookieAuth(SESSION_COOKIE)
+@ApiUnauthorizedResponse()
 @Controller('customer/refund-requests')
 @UseGuards(CustomerAuthGuard)
-export class CustomerRefundRequestsController {
-  constructor(
-    private readonly submissions: RefundSubmissionService,
-    @Inject(DATABASE) private readonly db: Database,
-  ) {}
+export class RefundsController {
+  constructor(private readonly refunds: RefundsService) {}
 
-  /** Submit a confirmed claim. Status: 201 new, 200 replay of the same key, 202 still processing. */
+  /** Submits a confirmed claim. Status: 201 new, 200 replay of the same key, 202 still processing. */
   @Post()
   @SubmitRateLimit()
   @ApiHeader({ name: 'Idempotency-Key', required: true, description: 'One UUID per confirmation card; reuse it when retrying.' })
@@ -36,7 +44,7 @@ export class CustomerRefundRequestsController {
     @Body() body: SubmitRefundRequestDto,
     @Res({ passthrough: true }) res: Response,
   ): Promise<CustomerRequestViewDto> {
-    const { kind, view } = await this.submissions.submit(customerId, idempotencyKey, body);
+    const { kind, view } = await this.refunds.submit(customerId, idempotencyKey, body);
     res.status(view.status === 'PROCESSING' ? HttpStatus.ACCEPTED : kind === 'created' ? HttpStatus.CREATED : HttpStatus.OK);
     return view;
   }
@@ -44,14 +52,14 @@ export class CustomerRefundRequestsController {
   @Get()
   @ApiOkResponse({ type: [CustomerRequestViewDto] })
   list(@CurrentCustomerId() customerId: string): Promise<CustomerRequestViewDto[]> {
-    return listCustomerRequests(this.db, customerId);
+    return this.refunds.list(customerId);
   }
 
   @Get(':requestId')
   @ApiOkResponse({ type: CustomerRequestViewDto })
   @ApiNotFoundResponse()
-  async get(@CurrentCustomerId() customerId: string, @Param('requestId') requestId: string): Promise<CustomerRequestViewDto> {
-    const view = PUBLIC_ID.test(requestId) ? await loadCustomerRequestView(this.db, customerId, { publicId: requestId }) : null;
+  async get(@CurrentCustomerId() customerId: string, @Param('requestId', ParsePublicRequestIdPipe) requestId: string): Promise<CustomerRequestViewDto> {
+    const view = await this.refunds.view(customerId, { publicId: requestId });
     if (!view) throw new NotFoundException('Request not found.');
     return view;
   }

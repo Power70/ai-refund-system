@@ -2,7 +2,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type pg from 'pg';
 import request from 'supertest';
-import { createPgPool, type Database } from '../src/database/database.js';
+import { createPgPool, type Database } from '../src/database/database.providers.js';
 import * as schema from '../src/database/schema.js';
 import { createTestApp } from './create-test-app.js';
 import { customerClient, prepareDemoDatabase, CSRF, strandedRequest, type TestDatabase } from './support/test-app.js';

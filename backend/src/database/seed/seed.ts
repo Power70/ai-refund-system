@@ -1,13 +1,14 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { createHash } from 'node:crypto';
-import { deriveResolution } from '../../admin/admin-resolution.js';
+import { deriveResolution } from '../../admin/resolution.service.js';
+import { canonicalJson } from '../../common/canonical-json.js';
 import { evaluateRequest } from '../../policy/policy-engine.js';
-import { canonicalJson, type RegisteredPolicy } from '../../policy/policy-registry.js';
-import { finalLineStatuses } from '../../refunds/decide-request.js';
-import { buildRequestFacts } from '../../refunds/refund-facts.js';
-import { resolutionCustomerMessage, templateCustomerMessage } from '../../refunds/refund-messages.js';
-import type { Database } from '../database.js';
+import type { RegisteredPolicy } from '../../policy/policy.service.js';
+import { resolutionCustomerMessage, templateCustomerMessage } from '../../refunds/customer-messages.service.js';
+import { finalLineStatuses } from '../../refunds/decision.rules.js';
+import { RequestFactsService } from '../../refunds/request-facts.service.js';
+import type { Database } from '../database.providers.js';
 import * as schema from '../schema.js';
 import { DEMO_CATALOG, demoOrderDates, DEMO_HISTORY, type DemoCustomer, type DemoHistoryEntry } from './demo-data.js';
 
@@ -96,6 +97,7 @@ export async function seedDemoHistory(
   history: readonly DemoHistoryEntry[] = DEMO_HISTORY,
 ): Promise<HistorySummary> {
   const summary: HistorySummary = { created: 0, refreshed: 0 };
+  const facts = new RequestFactsService(db);
 
   await db.transaction(async (tx) => {
     for (const entry of history) {
@@ -105,7 +107,7 @@ export async function seedDemoHistory(
         await redate(tx, existing.id, entry, at);
         summary.refreshed++;
       } else {
-        await create(tx, policy, entry, at);
+        await create(tx, facts, policy, entry, at);
         summary.created++;
       }
     }
@@ -113,7 +115,7 @@ export async function seedDemoHistory(
   return summary;
 }
 
-async function create(tx: Database, policy: RegisteredPolicy, entry: DemoHistoryEntry, at: Date): Promise<void> {
+async function create(tx: Database, factsService: RequestFactsService, policy: RegisteredPolicy, entry: DemoHistoryEntry, at: Date): Promise<void> {
   const [order] = await tx
     .select({ id: schema.orders.id, customerId: schema.orders.customerId, currency: schema.orders.currency })
     .from(schema.orders)
@@ -132,7 +134,7 @@ async function create(tx: Database, policy: RegisteredPolicy, entry: DemoHistory
     return { orderItemId, quantity: l.quantity };
   });
 
-  const facts = await buildRequestFacts(tx, { customerId: order.customerId, orderId: order.id, reason: entry.reason, lines, at });
+  const facts = await factsService.build({ customerId: order.customerId, orderId: order.id, reason: entry.reason, lines, at }, tx);
   const evaluation = evaluateRequest(policy.document, facts.lines, facts.history);
   const statuses = finalLineStatuses(evaluation);
   const claim = { orderId: order.id, reason: entry.reason, lines: [...lines].sort((a, b) => a.orderItemId.localeCompare(b.orderItemId)) };

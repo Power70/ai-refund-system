@@ -1,10 +1,14 @@
 import { Module } from '@nestjs/common';
-import { AdminAuthModule } from '../admin-auth/admin-auth.module.js';
-import { PolicyRegistryModule } from '../policy/policy-registry.module.js';
-import { AdminOverviewController, AdminRefundRequestsController } from './admin.controller.js';
+import { AuthModule } from '../auth/auth.module.js';
+import { HealthModule } from '../health/health.module.js';
+import { AdminController } from './admin.controller.js';
+import { AdminService } from './admin.service.js';
+import { ResolutionService } from './resolution.service.js';
 
+/** The support dashboard API: queue, case briefs, resolutions, metrics and detailed health. */
 @Module({
-  imports: [AdminAuthModule, PolicyRegistryModule],
-  controllers: [AdminRefundRequestsController, AdminOverviewController],
+  imports: [AuthModule, HealthModule],
+  controllers: [AdminController],
+  providers: [AdminService, ResolutionService],
 })
 export class AdminModule {}

@@ -4,14 +4,14 @@ import { APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AdminModule } from './admin/admin.module.js';
 import { AiModule } from './ai/ai.module.js';
+import { AuthModule } from './auth/auth.module.js';
 import { throttlerOptions } from './common/rate-limit.js';
 import { validateEnv } from './config/env.js';
 import { ConversationsModule } from './conversations/conversations.module.js';
-import { CustomerAuthModule } from './customer-auth/customer-auth.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
 import { OrdersModule } from './orders/orders.module.js';
-import { PolicyRegistryModule } from './policy/policy-registry.module.js';
+import { PolicyModule } from './policy/policy.module.js';
 import { RefundsModule } from './refunds/refunds.module.js';
 
 @Module({
@@ -26,9 +26,9 @@ import { RefundsModule } from './refunds/refunds.module.js';
     DatabaseModule,
     AiModule,
     ThrottlerModule.forRoot(throttlerOptions),
+    AuthModule,
+    PolicyModule,
     HealthModule,
-    PolicyRegistryModule,
-    CustomerAuthModule,
     OrdersModule,
     RefundsModule,
     ConversationsModule,

@@ -2,18 +2,17 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { and, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { randomBytes } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import pg from 'pg';
 import request from 'supertest';
 import { LlmError, type LlmAdapter, type ToolCallRequest, type ToolCallResult } from '../../src/ai/llm.types.js';
+import { generatePublicRequestId } from '../../src/common/validation.js';
 import type { AssistantTurn } from '../../src/conversations/chat-turn.js';
-import { createPgPool, type Database } from '../../src/database/database.js';
+import { createPgPool, type Database } from '../../src/database/database.providers.js';
 import { runMigrations } from '../../src/database/run-migrations.js';
 import * as schema from '../../src/database/schema.js';
 import { seedDemoCatalog, seedDemoHistory } from '../../src/database/seed/seed.js';
-import { findActivePolicy, registerPolicyVersion } from '../../src/policy/policy-registry.js';
-import { parsePolicy, type RefundReason } from '../../src/policy/policy-schema.js';
-import { generatePublicRequestId } from '../../src/refunds/refund-requests.js';
+import type { RefundReason } from '../../src/policy/policy-schema.js';
+import { policyService } from './policy-fixtures.js';
 
 /** Server used for tests. Override with TEST_DATABASE_ADMIN_URL (must be allowed to CREATE DATABASE). */
 const ADMIN_URL =
@@ -75,8 +74,8 @@ export async function prepareDemoDatabase(): Promise<TestDatabase> {
     const db = drizzle(pool, { schema });
     const now = new Date();
     await seedDemoCatalog(db, now);
-    await registerPolicyVersion(db, parsePolicy(readFileSync(new URL('../../../policy/refund-policy.yaml', import.meta.url), 'utf8')));
-    await seedDemoHistory(db, await findActivePolicy(db, now), now);
+    await policyService(db).registerPolicyFile();
+    await seedDemoHistory(db, await policyService(db).activePolicy(now), now);
   } finally {
     await pool.end();
   }

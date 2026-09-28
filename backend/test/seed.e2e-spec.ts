@@ -1,7 +1,7 @@
 import { count, eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type pg from 'pg';
-import { createPgPool } from '../src/database/database.js';
+import { createPgPool } from '../src/database/database.providers.js';
 import { runMigrations } from '../src/database/run-migrations.js';
 import * as schema from '../src/database/schema.js';
 import { DEMO_CATALOG } from '../src/database/seed/demo-data.js';

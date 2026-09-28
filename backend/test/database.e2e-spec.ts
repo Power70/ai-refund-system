@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type pg from 'pg';
-import { createPgPool, pgErrorCode } from '../src/database/database.js';
+import { createPgPool, pgErrorCode } from '../src/database/database.providers.js';
 import { runMigrations } from '../src/database/run-migrations.js';
 import * as schema from '../src/database/schema.js';
 import { createTestDatabase, type TestDatabase } from './support/test-app.js';

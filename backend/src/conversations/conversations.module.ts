@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common';
-import { CustomerAuthModule } from '../customer-auth/customer-auth.module.js';
-import { ConversationService } from './conversation.service.js';
+import { AuthModule } from '../auth/auth.module.js';
+import { OrdersModule } from '../orders/orders.module.js';
+import { RefundsModule } from '../refunds/refunds.module.js';
 import { ConversationsController } from './conversations.controller.js';
+import { ConversationsService } from './conversations.service.js';
 
 @Module({
-  imports: [CustomerAuthModule],
+  imports: [AuthModule, OrdersModule, RefundsModule],
   controllers: [ConversationsController],
-  providers: [ConversationService],
+  providers: [ConversationsService],
 })
 export class ConversationsModule {}

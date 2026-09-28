@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type pg from 'pg';
 import request from 'supertest';
-import { createPgPool, type Database } from '../src/database/database.js';
+import { createPgPool, type Database } from '../src/database/database.providers.js';
 import * as schema from '../src/database/schema.js';
 import { createTestApp } from './create-test-app.js';
 import { customerClient, prepareDemoDatabase, strandedRequest, type TestDatabase } from './support/test-app.js';

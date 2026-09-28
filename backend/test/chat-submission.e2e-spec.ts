@@ -4,7 +4,7 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import type pg from 'pg';
 import request from 'supertest';
 import { LlmError, type ToolCallRequest } from '../src/ai/llm.types.js';
-import { createPgPool, type Database } from '../src/database/database.js';
+import { createPgPool, type Database } from '../src/database/database.providers.js';
 import * as schema from '../src/database/schema.js';
 import type { RefundReason } from '../src/policy/policy-schema.js';
 import { createTestApp } from './create-test-app.js';

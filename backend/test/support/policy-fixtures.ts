@@ -1,8 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { parse } from 'yaml';
 import { z } from 'zod';
+import type { Database } from '../../src/database/database.providers.js';
 import type { LineInput, RequestHistoryFacts } from '../../src/policy/policy-engine.js';
 import { POLICY_OUTCOMES, REFUND_REASONS, type PolicyDocument } from '../../src/policy/policy-schema.js';
+import { PolicyService } from '../../src/policy/policy.service.js';
+
+/** The real policy/refund-policy.yaml. */
+export const REAL_POLICY_PATH = new URL('../../../policy/refund-policy.yaml', import.meta.url).pathname;
+
+/** A PolicyService outside Nest, reading the real policy file. */
+export const policyService = (db: Database) => new PolicyService(db, REAL_POLICY_PATH);
 
 /** A small valid policy for registry tests; vary version/effectiveFrom/threshold per case. */
 export function policyDocument(version: string, effectiveFrom: string, windowDays = 30): PolicyDocument {
