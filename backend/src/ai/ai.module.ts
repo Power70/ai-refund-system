@@ -1,7 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../config/env.js';
-import { AnthropicAdapter, OpenAiCompatibleAdapter } from './llm-adapters.js';
+import { createAdapter } from './llm-adapters.js';
 import { resolveLlmConfig, type LlmConfigResult } from './llm-providers.js';
 import { LLM_ADAPTER, LLM_CONFIG, LlmService } from './llm.service.js';
 
@@ -25,7 +25,7 @@ import { LLM_ADAPTER, LLM_CONFIG, LlmService } from './llm.service.js';
       inject: [LLM_CONFIG],
       useFactory: (setup: LlmConfigResult) => {
         if (!setup.enabled) return null;
-        return setup.config.protocol === 'anthropic' ? new AnthropicAdapter(setup.config) : new OpenAiCompatibleAdapter(setup.config);
+        return createAdapter(setup.config);
       },
     },
     LlmService,

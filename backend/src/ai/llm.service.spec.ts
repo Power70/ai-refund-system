@@ -2,10 +2,10 @@ import { Logger } from '@nestjs/common';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { z } from 'zod';
-import { AnthropicAdapter, OpenAiCompatibleAdapter } from './llm-adapters.js';
+import { createAdapter } from './llm-adapters.js';
 import { acceptsTemperature, resolveLlmConfig, type LlmConfigResult } from './llm-providers.js';
 import { LlmService } from './llm.service.js';
-import type { LlmConfig } from './llm.types.js';
+import type { LlmConfig, Protocol } from './llm.types.js';
 
 type Input = Parameters<typeof resolveLlmConfig>[0];
 const resolve = (overrides: Partial<Input>) => resolveLlmConfig({ AI_TIMEOUT_MS: 20_000, ...overrides });
@@ -20,7 +20,8 @@ describe('resolveLlmConfig', () => {
     ['sk-ant-api03-abc', 'anthropic', 'anthropic', 'https://api.anthropic.com', 'claude-haiku-4-5-20251001'],
     ['sk-or-v1-abc', 'openrouter', 'openai', 'https://openrouter.ai/api/v1', 'openai/gpt-5-mini'],
     ['gsk_abc', 'groq', 'openai', 'https://api.groq.com/openai/v1', 'llama-3.3-70b-versatile'],
-    ['AIzaSyabc', 'gemini', 'openai', 'https://generativelanguage.googleapis.com/v1beta/openai', 'gemini-3.5-flash'],
+    ['AIzaSyabc', 'gemini', 'gemini', 'https://generativelanguage.googleapis.com/v1beta', 'gemini-3.5-flash'],
+    ['AQ.Ab8RNabc', 'gemini', 'gemini', 'https://generativelanguage.googleapis.com/v1beta', 'gemini-3.5-flash'],
     ['sk-proj-abc', 'openai', 'openai', 'https://api.openai.com/v1', 'gpt-5-mini'],
   ])('detects %s as %s', (key, provider, protocol, baseUrl, model) => {
     expect(resolve({ LLM_API_KEY: key })).toEqual({ enabled: true, config: { provider, protocol, baseUrl, model, apiKey: key, timeoutMs: 20_000 } });
@@ -39,6 +40,14 @@ describe('resolveLlmConfig', () => {
     });
   });
 
+  it('treats blank settings as unset, as Compose passes them', () => {
+    expect(resolve({ LLM_API_KEY: 'AQ.Ab8RNabc', LLM_PROVIDER: '' as never, LLM_BASE_URL: '', LLM_MODEL: '' })).toMatchObject({
+      enabled: true,
+      config: { provider: 'gemini', baseUrl: 'https://generativelanguage.googleapis.com/v1beta', model: 'gemini-3.5-flash' },
+    });
+    expect(resolve({ LLM_API_KEY: 'AQ.Ab8RNabc', LLM_PROVIDER: 'gemini', LLM_BASE_URL: ' ', LLM_MODEL: '' })).toMatchObject({ enabled: true, config: { provider: 'gemini' } });
+  });
+
   it('is disabled for an unrecognised key format', () => {
     expect(resolve({ LLM_API_KEY: 'abc123' })).toMatchObject({ enabled: false });
   });
@@ -51,7 +60,8 @@ describe('acceptsTemperature', () => {
     ['o4-mini', false],
     ['claude-haiku-4-5-20251001', true],
     ['llama-3.3-70b-versatile', true],
-    ['gemini-3.5-flash', true],
+    ['gemini-3.5-flash', false],
+    ['gemini-2.5-flash', true],
   ])('%s → %s', (model, expected) => {
     expect(acceptsTemperature(model)).toBe(expected);
   });
@@ -95,21 +105,25 @@ beforeEach(() => {
 const json = (status: number, payload: unknown): Handler => (_b, _r, res) => res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(payload));
 const openAiToolCall = (args: unknown): Handler =>
   json(200, { choices: [{ message: { tool_calls: [{ function: { name: 'record_answer', arguments: JSON.stringify(args) } }] } }], usage: { prompt_tokens: 12, completion_tokens: 5 } });
+const geminiFunctionCall = (args: unknown): Handler =>
+  json(200, { candidates: [{ content: { parts: [{ functionCall: { name: 'record_answer', args } }] } }], usageMetadata: { promptTokenCount: 9, candidatesTokenCount: 3 } });
 const anthropicToolUse = (input: unknown): Handler =>
   json(200, { content: [{ type: 'tool_use', name: 'record_answer', input }], usage: { input_tokens: 10, output_tokens: 4 } });
 
-function service(protocol: 'openai' | 'anthropic', overrides: Partial<LlmConfig> = {}) {
+const MODELS: Record<Protocol, string> = { openai: 'llama-3.3-70b-versatile', anthropic: 'claude-haiku-4-5-20251001', gemini: 'gemini-2.5-flash' };
+
+function service(protocol: Protocol, overrides: Partial<LlmConfig> = {}) {
   const config: LlmConfig = {
-    provider: protocol === 'anthropic' ? 'anthropic' : 'openai',
+    provider: protocol === 'openai' ? 'openai' : protocol,
     protocol,
     baseUrl,
-    model: protocol === 'anthropic' ? 'claude-haiku-4-5-20251001' : 'llama-3.3-70b-versatile',
+    model: MODELS[protocol],
     apiKey: KEY,
     timeoutMs: 5_000,
     ...overrides,
   };
   const setup: LlmConfigResult = { enabled: true, config };
-  return new LlmService(setup, protocol === 'anthropic' ? new AnthropicAdapter(config) : new OpenAiCompatibleAdapter(config));
+  return new LlmService(setup, createAdapter(config));
 }
 
 describe('OpenAI-compatible adapter', () => {
@@ -162,6 +176,46 @@ describe('Anthropic adapter', () => {
       tool_choice: { type: 'tool', name: 'record_answer' },
       messages: [{ role: 'user', content: 'Is it damaged?' }],
     });
+  });
+});
+
+describe('Gemini adapter', () => {
+  it('forces the function call with the key in x-goog-api-key', async () => {
+    handlers.push(geminiFunctionCall({ answer: 'yes', confidence: 0.96 }));
+    const result = await service('gemini', { apiKey: 'AQ.test-key' }).generateStructured(request);
+
+    expect(result).toMatchObject({ ok: true, value: { answer: 'yes', confidence: 0.96 }, inputTokens: 9, outputTokens: 3 });
+    const [call] = captured;
+    expect(call.url).toBe('/models/gemini-2.5-flash:generateContent');
+    expect(call.headers['x-goog-api-key']).toBe('AQ.test-key');
+    expect(call.headers.authorization).toBeUndefined();
+    expect(call.body).toMatchObject({
+      systemInstruction: { parts: [{ text: 'Answer.' }] },
+      contents: [{ role: 'user', parts: [{ text: 'Is it damaged?' }] }],
+      toolConfig: { functionCallingConfig: { mode: 'ANY', allowedFunctionNames: ['record_answer'] } },
+      generationConfig: { temperature: 0 },
+    });
+    const [declaration] = (call.body.tools as { functionDeclarations: { parametersJsonSchema: Record<string, unknown> }[] }[])[0].functionDeclarations;
+    expect(declaration).toMatchObject({ name: 'record_answer', parametersJsonSchema: { type: 'object', required: ['answer', 'confidence'] } });
+  });
+
+  it('leaves Gemini 3 at its default temperature', async () => {
+    handlers.push(geminiFunctionCall({ answer: 'no', confidence: 0.5 }));
+    await service('gemini', { model: 'gemini-3.5-flash' }).generateStructured(request);
+    expect(captured[0].url).toBe('/models/gemini-3.5-flash:generateContent');
+    expect(captured[0].body).not.toHaveProperty('generationConfig');
+  });
+
+  it('accepts JSON text when no function call is returned', async () => {
+    handlers.push(json(200, { candidates: [{ content: { parts: [{ text: '{"answer":"no","confidence":0.3}' }] } }] }));
+    expect(await service('gemini').generateStructured(request)).toMatchObject({ ok: true, value: { answer: 'no', confidence: 0.3 } });
+  });
+
+  it('reports a rejected key as an auth failure without echoing the key', async () => {
+    handlers.push(json(401, { error: { message: 'API key AQ.test-key not valid' } }));
+    const llm = service('gemini', { apiKey: 'AQ.test-key' });
+    expect(await llm.generateStructured(request)).toMatchObject({ ok: false, reason: 'auth' });
+    expect(JSON.stringify(llm.report())).not.toContain('AQ.test-key');
   });
 });
 

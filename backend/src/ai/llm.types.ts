@@ -1,5 +1,5 @@
 export type ProviderId = 'anthropic' | 'openai' | 'gemini' | 'groq' | 'openrouter' | 'openai-compatible';
-export type Protocol = 'anthropic' | 'openai';
+export type Protocol = 'anthropic' | 'openai' | 'gemini';
 
 export interface LlmConfig {
   provider: ProviderId;

@@ -42,7 +42,7 @@ interface ChatCompletion {
   usage?: { prompt_tokens?: number; completion_tokens?: number };
 }
 
-/** OpenAI Chat Completions protocol: OpenAI, Gemini, Groq, OpenRouter, DeepSeek, Mistral, Ollama. */
+/** OpenAI Chat Completions protocol: OpenAI, Groq, OpenRouter, DeepSeek, Mistral, Ollama. */
 export class OpenAiCompatibleAdapter implements LlmAdapter {
   constructor(private readonly config: LlmConfig) {}
 
@@ -117,4 +117,51 @@ export class AnthropicAdapter implements LlmAdapter {
     if (!block) throw new LlmError('invalid_response', 'Response contained no tool call');
     return { input: block.input, inputTokens: response.usage?.input_tokens, outputTokens: response.usage?.output_tokens };
   }
+}
+
+interface GenerateContentResponse {
+  candidates?: { content?: { parts?: { text?: string; functionCall?: { name?: string; args?: unknown } }[] } }[];
+  usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
+}
+
+/**
+ * Gemini generateContent API with a forced function call. The key is sent as x-goog-api-key,
+ * which accepts both key formats ("AIza…" and "AQ.…"); the OpenAI-compatible endpoint rejects "AQ." keys.
+ */
+export class GeminiAdapter implements LlmAdapter {
+  constructor(private readonly config: LlmConfig) {}
+
+  async callTool(request: ToolCallRequest): Promise<ToolCallResult> {
+    const body = {
+      systemInstruction: { parts: [{ text: request.system }] },
+      contents: [{ role: 'user', parts: [{ text: request.user }] }],
+      tools: [{ functionDeclarations: [{ name: request.toolName, description: request.toolDescription, parametersJsonSchema: request.parameters }] }],
+      toolConfig: { functionCallingConfig: { mode: 'ANY', allowedFunctionNames: [request.toolName] } },
+      ...(request.temperature === undefined ? {} : { generationConfig: { temperature: request.temperature } }),
+    };
+    const model = encodeURIComponent(this.config.model.replace(/^models\//, ''));
+    const response = await postJson<GenerateContentResponse>(
+      `${this.config.baseUrl}/models/${model}:generateContent`,
+      { 'x-goog-api-key': this.config.apiKey },
+      body,
+      request.signal,
+      this.config.apiKey,
+    );
+
+    const parts = response.candidates?.[0]?.content?.parts ?? [];
+    const call = parts.find((p) => p.functionCall?.name === request.toolName)?.functionCall ?? parts.find((p) => p.functionCall)?.functionCall;
+    const usage = { inputTokens: response.usageMetadata?.promptTokenCount, outputTokens: response.usageMetadata?.candidatesTokenCount };
+    if (call) return { input: call.args ?? {}, ...usage };
+
+    const text = parts.map((p) => p.text ?? '').join('');
+    if (!text.trim()) throw new LlmError('invalid_response', 'Response contained no function call or content');
+    return { input: parseJson(text), ...usage };
+  }
+}
+
+/** The adapter for the configured provider's protocol. */
+export function createAdapter(config: LlmConfig): LlmAdapter {
+  if (config.protocol === 'anthropic') return new AnthropicAdapter(config);
+  if (config.protocol === 'gemini') return new GeminiAdapter(config);
+  return new OpenAiCompatibleAdapter(config);
 }

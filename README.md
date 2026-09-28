@@ -74,7 +74,7 @@ Every variable is optional; `.env.example` documents them all. Compose reads a `
 | `sk-ant-` | Anthropic | `claude-haiku-4-5-20251001` |
 | `sk-or-` | OpenRouter | `openai/gpt-5-mini` |
 | `gsk_` | Groq | `llama-3.3-70b-versatile` |
-| `AIza` | Google Gemini | `gemini-3.5-flash` |
+| `AIza` or `AQ.` | Google Gemini | `gemini-3.5-flash` |
 | `sk-` | OpenAI | `gpt-5-mini` |
 
 An unrecognised key disables the AI with a logged reason instead of stopping startup. The admin health view shows the provider, model and last error; the key itself never appears in logs, errors or responses.
@@ -131,7 +131,7 @@ Four Compose services: `db` (not published), `migrate` (runs SQL migrations and 
 | `policy` | Loading, versioning and evaluating the YAML policy |
 | `admin` | Queue, case brief, resolutions and metrics |
 | `health` | Public liveness and detailed admin health |
-| `ai` | Provider-neutral structured generation (Anthropic and OpenAI-compatible adapters) |
+| `ai` | Provider-neutral structured generation (Anthropic, Gemini and OpenAI-compatible adapters) |
 | `database` | Drizzle schema, migrations and demo seed |
 
 ### Request lifecycle

@@ -110,12 +110,17 @@ describe('admin metrics and health (e2e)', () => {
     });
     await new Promise<void>((resolve) => provider.listen(0, '127.0.0.1', resolve));
     const saved = { ...process.env };
+    // Blank values mirror docker-compose, which passes every unset variable as an empty string.
     Object.assign(process.env, {
+      LLM_PROVIDER: '',
       LLM_API_KEY: 'local-test-key',
       LLM_BASE_URL: `http://127.0.0.1:${(provider.address() as AddressInfo).port}/v1`,
       LLM_MODEL: 'stub-model',
     });
-    const aiApp = await createTestApp(testDb.url);
+    // Configuration is validated when AppModule loads, so load a fresh copy that sees these values.
+    vi.resetModules();
+    const fresh = (await import('./create-test-app.js')) as typeof import('./create-test-app.js');
+    const aiApp = await fresh.createTestApp(testDb.url);
     try {
       await vi.waitFor(() => expect(seen).toHaveLength(1));
       expect(seen[0]).toEqual({ auth: 'Bearer local-test-key', tool: 'report_ready' });
