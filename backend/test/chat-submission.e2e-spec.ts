@@ -214,7 +214,7 @@ describe('submitting a claim from chat (e2e)', () => {
       const { res } = await decidedChat('jide.afolabi@example.com', 'WN-K5R2BW', 'Bluetooth speaker, mini', 'speaker crackles');
       const { decision } = await decisionOf(res.body.requestId);
       expect(decision.messageSource).toBe('TEMPLATE');
-      expect(res.body.customerMessage).toMatch(/^Your request needs a review by our support team/);
+      expect(res.body.customerMessage).toMatch(/^Thanks for your patience. We're taking a closer look at your request/);
       const calls = await db.select().from(schema.aiCalls).where(eq(schema.aiCalls.requestId, decision.requestId));
       const call = calls.find((c) => c.kind === 'DECISION_REPLY');
       expect(call).toMatchObject({ kind: 'DECISION_REPLY', outcome: 'OK', failureReason: 'GUARD_REJECTED' });

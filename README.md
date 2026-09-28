@@ -156,7 +156,7 @@ sequenceDiagram
   API-->>C: Approved / Denied / Escalated
 ```
 
-1. **Chat.** Each message runs one AI turn. The model sees the customer's own orders as short refs (`O1.I2`), never database IDs, emails or addresses. Its proposal is checked in code before the customer sees it.
+1. **Chat.** Each message runs one AI turn. The assistant works from the customer's situation, read fresh from the database each turn: today's date, their orders with delivery dates, what is still claimable, in progress or already refunded, final-sale items, their earlier requests and outcomes, the policy's customer-facing explanations and any confirmation card on screen. Orders and items appear as short refs (`O1.I2`), never database IDs, emails or addresses. Its proposal is checked in code before the customer sees it.
 2. **Confirmation.** The customer sees exactly what will be judged (items, quantities, reason) and can change it. Only this confirmed claim is ever evaluated.
 3. **Transaction 1** locks the item rows, checks refundable quantities, captures the policy version in force and the conversation's flags, reserves the quantities and takes a 60-second processing lease. Nothing slow runs inside it.
 4. **Decision.** Facts are read from the database as of submission time; the policy engine evaluates them; the safety gate may hold an approval for a person. The customer message is written by the AI with placeholders, checked, then filled from stored values; if anything fails, a policy-worded template is used.
@@ -169,7 +169,7 @@ The AI has three jobs, none of which can approve money:
 
 | Call | Input | Output | Can it change a decision? |
 |---|---|---|---|
-| Chat turn | Last 12 messages, the customer's orders as refs, the reason list | Reply, up to 4 quick-reply chips, an optional claim proposal, flags, a staff summary | No. It only proposes; the customer confirms |
+| Chat turn | Last 12 messages, the customer's orders and earlier requests from the database, customer-facing policy notes, the card on screen | Reply, up to 4 quick-reply chips, an optional claim proposal, flags, a staff summary | No. It only proposes; the customer confirms |
 | Decision reply | The stored decision (status, items, public reasons) | Customer-facing prose with placeholders such as `{{approved_amount}}` | No. The status and amounts come from the database |
 | Case note | Transcript, proposal and confirmed claim of an escalated chat claim | ≤ 300-character summary, suggested action, rationale | No. Labelled "AI suggestion" for the reviewer |
 
@@ -177,7 +177,7 @@ The AI has three jobs, none of which can approve money:
 
 **Verification before the customer sees a proposal.** Refs must exist among the customer's own orders; quantities must be refundable; every evidence quote must appear verbatim in something the customer *typed* (not in chip selections). A proposal that fails is dropped and the assistant asks a clarifying question.
 
-**Guards on text.** Before a decision, assistant replies may not mention money, outcomes, contact details or internal terms. After a decision, the model writes placeholders only; replies containing currency symbols, numbers not in the facts, contradictions of the status or promises to reverse it are replaced by templates. Follow-up disputes get a fixed message with the request ID.
+**Guards on text.** Before a decision, assistant replies may not mention money, outcomes, contact details or internal terms; a reply that does is sent back to the model once with the reason, and internal refs are replaced by item names and order numbers. After a decision, the model writes placeholders only; replies containing currency symbols, numbers not in the facts, contradictions of the status or promises to reverse it are replaced by templates. Follow-up disputes get a fixed message with the request ID.
 
 **The safety gate** runs after the policy and can only turn *Approved* into *Escalated*. An approval stands only if the claim came from an AI-assessed chat and:
 
@@ -214,7 +214,7 @@ Each request records the policy version in force when it was submitted; retries 
 - **Ownership:** every customer resource (orders, conversations, requests) is looked up by owner; another customer's resource is a plain 404. Customer responses contain no rule IDs, traces, flags or AI data.
 - **Admin:** bearer token compared in constant time; 10 wrong tokens lock the IP for 15 minutes. The dashboard keeps the token in memory only.
 - **CSRF:** every state-changing request needs `X-Requested-With: refund-app`, which a cross-site form cannot send; the API allows no cross-origin requests.
-- **Rate limits:** 120 requests/min per client, 10 sign-ins/min per IP, 20 chat messages/min and 5 submissions/min per customer; 10 conversations per customer per day, 6 AI turns per conversation and 10 follow-up questions per request bound AI cost.
+- **Rate limits:** 120 requests/min per client, 10 sign-ins/min per IP, 20 chat messages/min and 5 submissions/min per customer; 10 conversations per customer per day, 12 AI turns per conversation and 10 follow-up questions per request bound AI cost.
 - **Input:** strict DTO validation (unknown fields rejected), 32 KB body limit, control characters stripped, database constraints behind the application checks (valid amounts, lease state, required reviewer note, append-only audit log enforced by triggers).
 - **Prompt injection:** customer text is wrapped in delimited blocks and treated as data; the model sees refs, not IDs; code-side heuristics flag injection and foreign order numbers; flagged chats cannot auto-approve and their case note is suppressed; model output never reaches the policy engine.
 - **Transport and headers:** Helmet on the API; CSP, `nosniff`, `X-Frame-Options: DENY` and a strict referrer policy on the SPA; forwarding headers are overwritten at the proxy. The public `/health` returns only `{"status":"ok"}`.

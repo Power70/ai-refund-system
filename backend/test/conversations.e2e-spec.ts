@@ -6,6 +6,7 @@ import request from 'supertest';
 import { LlmError, type ToolCallRequest } from '../src/ai/llm.types.js';
 import { createPgPool, type Database } from '../src/database/database.providers.js';
 import * as schema from '../src/database/schema.js';
+import { MAX_AI_TURNS } from '../src/conversations/conversations.service.js';
 import { createTestApp } from './create-test-app.js';
 import { customerClient, FakeLlm, refFor, turn, prepareDemoDatabase, CSRF, type TestDatabase } from './support/test-app.js';
 
@@ -101,6 +102,24 @@ describe('customer conversations (e2e)', () => {
       expect(prompt.system).not.toMatch(/\$|500|30 days|final sale/i);
     });
 
+    it("gives the model this customer's situation from the database, and nothing internal", async () => {
+      // Obi's kettle was refunded in full; Hassan's headphones were denied by a reviewer before.
+      const obi = await chat('obi.chukwu@example.com', 'WN-H9F3LX');
+      let seen!: ToolCallRequest;
+      fake.next((req: ToolCallRequest) => ((seen = req), turn()));
+      await obi.send({ text: 'Where is my kettle refund?' }).expect(200);
+
+      expect(seen.user).toMatch(/<today>\d{4}-\d{2}-\d{2}<\/today>/);
+      expect(seen.user).toMatch(/order WN-H9F3LX, placed \d{4}-\d{2}-\d{2}, delivered \d{4}-\d{2}-\d{2} \(\d+ days ago\)/);
+      expect(seen.user).toMatch(/"Electric kettle, 1 L": bought 1; can be claimed now: 0; 1 already refunded/);
+      expect(seen.user).toMatch(/rr_15bkett00001 on \d{4}-\d{2}-\d{2}, order WN-H9F3LX: 1 x "Electric kettle, 1 L" \(refunded\)/);
+      expect(seen.user).toContain('- Refunds are available within 30 days of delivery.');
+      expect(seen.user).toContain('answered within 2 business days');
+      // Review and request-level rules stay internal, and nothing about other customers leaks.
+      expect(seen.user).not.toMatch(/\$|500|team member will review|previous request/);
+      expect(seen.user).not.toMatch(/@example\.com|[0-9a-f]{8}-[0-9a-f]{4}-/);
+    });
+
     it('records the call without the prompt', async () => {
       const [call] = await grace.calls();
       expect(call).toMatchObject({ kind: 'CHAT_TURN', provider: 'openai-compatible', model: 'fake-model', outcome: 'OK', attempts: 1, inputTokens: 100, outputTokens: 50 });
@@ -158,12 +177,14 @@ describe('customer conversations (e2e)', () => {
       expect(body.messages.at(-1).text).toBe('"Electric kettle, 1 L" has already been refunded in full.');
     });
 
-    it('replaces a reply that promises an outcome, but keeps the verified proposal', async () => {
+    it('sends a reply that promises an outcome back to the model once, with the reason', async () => {
       const ada = await chat('ada.okafor@example.com', 'WN-7K3P9Q');
-      fake.next((req: ToolCallRequest) => ({ ...proposeItem('Oxford shirt, blue', { evidenceQuotes: ['ripped sleeve'] })(req), reply: 'Great news, this will be approved!' }));
+      const withReply = (reply: string) => (req: ToolCallRequest) => ({ ...proposeItem('Oxford shirt, blue', { evidenceQuotes: ['ripped sleeve'] })(req), reply });
+      fake.next(withReply('Great news, this will be approved!'), withReply("I've filled in the details for your Oxford shirt. Please check them and press Submit."));
       const { body } = await ada.send({ text: 'My oxford shirt has a ripped sleeve' }).expect(200);
-      expect(body.messages.at(-1).text).toBe('Thanks. Could you tell me a bit more about the item and what happened?');
+      expect(body.messages.at(-1).text).toBe("I've filled in the details for your Oxford shirt. Please check them and press Submit.");
       expect(body.proposal.lines[0].itemName).toBe('Oxford shirt, blue');
+      expect(fake.requests.at(-1)!.user).toMatch(/rejected \(reply: reply must not mention money/);
     });
 
     it('records flags the customer never sees, and keeps them', async () => {
@@ -197,9 +218,9 @@ describe('customer conversations (e2e)', () => {
       expect((await jide.calls()).map((c) => c.outcome)).toEqual(['ERROR', 'ERROR']);
     });
 
-    it(`after ${6} AI turns`, async () => {
+    it(`after ${MAX_AI_TURNS} AI turns`, async () => {
       const ifeoma = await chat('ifeoma.nwosu@example.com', 'WN-6PQ8XE');
-      for (let i = 0; i < 6; i++) {
+      for (let i = 0; i < MAX_AI_TURNS; i++) {
         fake.next(turn());
         await ifeoma.send({ text: `message ${i}` }).expect(200);
       }

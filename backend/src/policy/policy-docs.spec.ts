@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { describeCondition, GENERATED_NOTICE, renderPolicyMarkdown } from './policy-docs.js';
+import { customerPolicyNotes, describeCondition, GENERATED_NOTICE, renderPolicyMarkdown } from './policy-docs.js';
 import { parsePolicy, type PolicyDocument } from './policy-schema.js';
 
 describe('describeCondition', () => {
@@ -99,5 +99,15 @@ describe('policy/refund-policy.md', () => {
     const expected = renderPolicyMarkdown(parsePolicy(read('refund-policy.yaml')));
     // Normalise line endings so a Windows checkout without .gitattributes still compares fairly.
     expect(read('refund-policy.md').replaceAll('\r\n', '\n')).toBe(expected);
+  });
+});
+
+describe('customerPolicyNotes', () => {
+  it('shares only the explanations of item rules that allow or deny, once each', () => {
+    const notes = customerPolicyNotes(parsePolicy(read('refund-policy.yaml')));
+    expect(notes).toContain('Refunds are available within 30 days of delivery.');
+    expect(notes).toContain('Final-sale items are not eligible for a refund.');
+    expect(notes.join(' ')).not.toMatch(/\$|team member|previous request|confirm delivery/);
+    expect(new Set(notes).size).toBe(notes.length);
   });
 });

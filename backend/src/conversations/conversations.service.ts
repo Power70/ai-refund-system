@@ -6,17 +6,21 @@ import { firstNameOf } from '../common/format.js';
 import { DATABASE, type Database } from '../database/database.providers.js';
 import { aiCalls, conversationMessages, conversations, customers, orderItems, orders, refundRequests, type ConversationFlags } from '../database/schema.js';
 import { OrdersService } from '../orders/orders.service.js';
+import { customerPolicyNotes } from '../policy/policy-docs.js';
 import { REASON_LABELS, REFUND_REASONS } from '../policy/policy-schema.js';
+import { PolicyService } from '../policy/policy.service.js';
 import { CustomerMessagesService } from '../refunds/customer-messages.service.js';
+import { RefundsService } from '../refunds/refunds.service.js';
 import { assistantTurnSchema, buildTurnPrompt, sanitizeText, verifyTurn, type ChatContext, type ContextOrder, type ProposalRecord, type QuickReply } from './chat-turn.js';
 import type { ConversationViewDto, SendMessageDto } from './dto/conversations.dto.js';
 
 const REASON_OPTIONS = REFUND_REASONS.map((reason) => ({ reason, label: REASON_LABELS[reason] }));
 
-export const MAX_AI_TURNS = 6;
+export const MAX_AI_TURNS = 12;
 export const MAX_FOLLOW_UPS = 10;
 export const MAX_FAILED_TURNS = 2;
 export const MAX_CONVERSATIONS_PER_DAY = 10;
+const MAX_EARLIER_REQUESTS = 10;
 const DAY_MS = 24 * 60 * 60 * 1000;
 // A pending turn older than this is treated as abandoned (process crash) and may be replaced.
 const PENDING_STALE_MS = 60_000;
@@ -69,6 +73,8 @@ export class ConversationsService {
     private readonly llm: LlmService,
     private readonly orders: OrdersService,
     private readonly messages: CustomerMessagesService,
+    private readonly refunds: RefundsService,
+    private readonly policies: PolicyService,
   ) {}
 
   async start(customerId: string, now = new Date()): Promise<ConversationViewDto> {
@@ -230,7 +236,7 @@ export class ConversationsService {
     if (conversation.mode === 'MANUAL') return template(MESSAGES.manual);
     if (conversation.turnCount >= MAX_AI_TURNS) return template(MESSAGES.handover, { mode: 'MANUAL', handoverReason: 'TURN_LIMIT' });
 
-    const context = await this.loadContext(customerId, conversation.id);
+    const context = await this.loadContext(customerId, conversation);
     const { system, user } = buildTurnPrompt(context);
     const result = await this.llm.generateStructured({
       name: 'record_turn',
@@ -301,22 +307,29 @@ export class ConversationsService {
     return outcome;
   }
 
-  protected async loadContext(customerId: string, conversationId: string): Promise<ChatContext> {
-    const rows = await this.db
-      .select({ order: orders, item: orderItems })
-      .from(orders)
-      .innerJoin(orderItems, eq(orderItems.orderId, orders.id))
-      .where(eq(orders.customerId, customerId))
-      .orderBy(asc(orders.placedAt), asc(orderItems.name));
+  /** What the assistant knows for one turn, all read from our own records. */
+  protected async loadContext(customerId: string, conversation: ConversationRow, now = new Date()): Promise<ChatContext> {
+    const [rows, requests, policy, transcript] = await Promise.all([
+      this.db
+        .select({ order: orders, item: orderItems })
+        .from(orders)
+        .innerJoin(orderItems, eq(orderItems.orderId, orders.id))
+        .where(eq(orders.customerId, customerId))
+        .orderBy(asc(orders.placedAt), asc(orderItems.name)),
+      this.refunds.list(customerId),
+      this.policies.activePolicy(now),
+      this.db
+        .select({ role: conversationMessages.role, content: conversationMessages.content, typed: conversationMessages.typed })
+        .from(conversationMessages)
+        .where(eq(conversationMessages.conversationId, conversation.id))
+        .orderBy(asc(conversationMessages.createdAt), asc(conversationMessages.role)),
+    ]);
     const quantities = await this.orders.itemQuantities(rows.map((r) => r.item.id));
 
     const byOrder = new Map<string, ContextOrder>();
     for (const { order, item } of rows) {
-      let entry = byOrder.get(order.id);
-      if (!entry) {
-        entry = { ref: `O${byOrder.size + 1}`, orderId: order.id, orderNumber: order.orderNumber, deliveredAt: order.deliveredAt, items: [] };
-        byOrder.set(order.id, entry);
-      }
+      const entry = byOrder.get(order.id) ?? { ref: `O${byOrder.size + 1}`, orderId: order.id, orderNumber: order.orderNumber, placedAt: order.placedAt, deliveredAt: order.deliveredAt, items: [] };
+      byOrder.set(order.id, entry);
       const q = quantities.get(item.id);
       entry.items.push({
         ref: `${entry.ref}.I${entry.items.length + 1}`,
@@ -325,15 +338,21 @@ export class ConversationsService {
         purchased: item.quantity,
         refundable: q?.refundable ?? 0,
         pending: q?.pending ?? 0,
+        refunded: q?.refunded ?? 0,
+        finalSale: item.finalSale,
       });
     }
 
-    const transcript = await this.db
-      .select({ role: conversationMessages.role, content: conversationMessages.content, typed: conversationMessages.typed })
-      .from(conversationMessages)
-      .where(eq(conversationMessages.conversationId, conversationId))
-      .orderBy(asc(conversationMessages.createdAt), asc(conversationMessages.role));
-    return { orders: [...byOrder.values()], transcript };
+    const proposal = conversation.latestProposal as ProposalRecord | null;
+    return {
+      today: now,
+      orders: [...byOrder.values()],
+      earlierRequests: requests.slice(0, MAX_EARLIER_REQUESTS).map((r) => ({ requestId: r.requestId, orderNumber: r.orderNumber, createdAt: new Date(r.createdAt), lines: r.lines })),
+      policyNotes: customerPolicyNotes(policy.document),
+      reviewEtaBusinessDays: policy.document.reviewEtaBusinessDays,
+      card: proposal ? { orderId: proposal.orderId, orderNumber: proposal.orderNumber, reason: proposal.reason, lines: proposal.lines } : null,
+      transcript,
+    };
   }
 }
 

@@ -51,7 +51,7 @@ describe('refund submission (e2e)', () => {
     const key = crypto.randomUUID();
     const res = await grace.submit(body, key).expect(201);
     expect(res.body).toMatchObject({ status: 'ESCALATED', approvedAmountMinor: 0, lines: [{ outcome: 'UNDER_REVIEW' }] });
-    expect(res.body.customerMessage).toBe("Your request needs a review by our support team. We'll get back to you within 2 business days.");
+    expect(res.body.customerMessage).toBe("Thanks for your patience. We're taking a closer look at your request and will get back to you within 2 business days.");
 
     const { request, decision, lines, audit } = await stored(res.body.requestId);
     expect(request).toMatchObject({ state: 'DECIDED', leaseOwner: null, leaseExpiresAt: null, reasonConfirmed: 'CHANGED_MIND' });

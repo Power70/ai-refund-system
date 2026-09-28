@@ -29,6 +29,6 @@ import { SWEEPER_INTERVAL_MS, SweeperService } from './sweeper.service.js';
       useFactory: (config: ConfigService<Env, true>) => config.get('SWEEPER_INTERVAL_MS', { infer: true }),
     },
   ],
-  exports: [CustomerMessagesService],
+  exports: [RefundsService, CustomerMessagesService],
 })
 export class RefundsModule {}

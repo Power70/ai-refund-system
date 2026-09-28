@@ -2,7 +2,7 @@ import { IconClipboardCheck, IconInfoCircle, IconMinus, IconPlus, IconX } from '
 import { useRef, useState } from 'react'
 import type { Conversation, Order, Proposal, RefundReason } from '../api/client'
 import { formatMoney } from '../lib/format'
-import { Button, ChatCard, inputClass, pillClass } from './ui'
+import { Button, ChatCard, focusRing, inputClass, pillClass } from './ui'
 
 export interface ClaimDraft {
   orderNumber: string
@@ -32,8 +32,8 @@ export function ClaimCard({ orders, reasons, proposal, submitting, onSubmit, onC
   const items = order?.items.filter((i) => i.refundableQuantity > 0 || quantities[i.id]) ?? []
   const lines = items.filter((i) => (quantities[i.id] ?? 0) > 0).map((i) => ({ itemId: i.id, quantity: quantities[i.id] }))
   const total = items.reduce((sum, i) => sum + i.unitPricePaidMinor * (quantities[i.id] ?? 0), 0)
-  const proposedIds = new Set(proposal?.lines.map((l) => l.orderItemId))
-  const needsReview = proposal !== null && (reason !== proposal.reason || lines.some((l) => !proposedIds.has(l.itemId)))
+  // A reason that differs from what the customer described in the chat is worth a second look.
+  const describedReason = proposal && reason !== proposal.reason ? reasons.find((r) => r.reason === proposal.reason) : undefined
   const canSubmit = !submitting && reason !== null && lines.length > 0
 
   const submit = () => {
@@ -119,11 +119,16 @@ export function ClaimCard({ orders, reasons, proposal, submitting, onSubmit, onC
         </div>
       </fieldset>
 
-      {needsReview && (
-        <p className="mt-3 flex gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          <IconInfoCircle size={18} className="shrink-0" aria-hidden="true" />
-          Changes like this are checked by our support team before a decision is made.
-        </p>
+      {describedReason && (
+        <div className="mt-3 flex gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800" role="status">
+          <IconInfoCircle size={18} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <div>
+            <p>In the chat you described this as “{describedReason.label.toLowerCase()}”. Please make sure the reason matches what happened.</p>
+            <button type="button" onClick={() => setReason(describedReason.reason)} className={`mt-1 font-medium underline underline-offset-2 hover:text-amber-900 ${focusRing}`}>
+              Use “{describedReason.label}”
+            </button>
+          </div>
+        </div>
       )}
 
       <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-3">

@@ -1,4 +1,17 @@
-import { foreignOrderNumbers, isSafeTurnReply, looksLikeInjection, normalizeForEvidence, sanitizeText, TEMPLATES, verifyTurn, type AssistantTurn, type ChatContext } from './chat-turn.js';
+import {
+  assistantTurnSchema,
+  buildTurnPrompt,
+  foreignOrderNumbers,
+  isSafeTurnReply,
+  looksLikeInjection,
+  normalizeForEvidence,
+  replaceRefs,
+  sanitizeText,
+  TEMPLATES,
+  verifyTurn,
+  type AssistantTurn,
+  type ChatContext,
+} from './chat-turn.js';
 
 describe('isSafeTurnReply', () => {
   it.each([
@@ -66,21 +79,34 @@ describe('sanitizeText and normalizeForEvidence', () => {
   });
 });
 
+const item = (ref: string, orderItemId: string, name: string, quantities: { purchased: number; refundable: number; pending?: number; refunded?: number }, finalSale = false) => ({
+  ref, orderItemId, name, pending: 0, refunded: 0, finalSale, ...quantities,
+});
+
 const context: ChatContext = {
+  today: new Date('2026-09-27T12:00:00Z'),
   orders: [
     {
       ref: 'O1',
       orderId: 'order-1',
       orderNumber: 'WN-4GK1VS',
+      placedAt: new Date('2026-09-12T10:00:00Z'),
       deliveredAt: new Date('2026-09-17T00:00:00Z'),
       items: [
-        { ref: 'O1.I1', orderItemId: 'item-blue', name: 'Linen shirt, blue', purchased: 2, refundable: 2, pending: 0 },
-        { ref: 'O1.I2', orderItemId: 'item-white', name: 'Linen shirt, white', purchased: 1, refundable: 0, pending: 1 },
-        { ref: 'O1.I3', orderItemId: 'item-belt', name: 'Belt', purchased: 1, refundable: 0, pending: 0 },
+        item('O1.I1', 'item-blue', 'Linen shirt, blue', { purchased: 2, refundable: 2 }),
+        item('O1.I2', 'item-white', 'Linen shirt, white', { purchased: 1, refundable: 0, pending: 1 }),
+        item('O1.I3', 'item-belt', 'Belt', { purchased: 1, refundable: 0, refunded: 1 }, true),
       ],
     },
-    { ref: 'O2', orderId: 'order-2', orderNumber: 'WN-2HX8LD', deliveredAt: null, items: [{ ref: 'O2.I1', orderItemId: 'item-mug', name: 'Mug', purchased: 1, refundable: 1, pending: 0 }] },
+    { ref: 'O2', orderId: 'order-2', orderNumber: 'WN-2HX8LD', placedAt: new Date('2026-09-25T10:00:00Z'), deliveredAt: null, items: [item('O2.I1', 'item-mug', 'Mug', { purchased: 1, refundable: 1 })] },
   ],
+  earlierRequests: [
+    { requestId: 'rr_abcdefghjkmn', orderNumber: 'WN-4GK1VS', createdAt: new Date('2026-09-20T09:00:00Z'), lines: [{ itemName: 'Belt', quantity: 1, outcome: 'REFUNDED' }] },
+    { requestId: 'rr_bcdefghjkmnp', orderNumber: 'WN-4GK1VS', createdAt: new Date('2026-09-26T09:00:00Z'), lines: [{ itemName: 'Linen shirt, white', quantity: 1, outcome: 'UNDER_REVIEW' }] },
+  ],
+  policyNotes: ['Refunds are available within 30 days of delivery.', 'Final-sale items are not eligible for a refund.'],
+  reviewEtaBusinessDays: 2,
+  card: null,
   transcript: [],
 };
 const typed = ['Hi there', 'The blue shirt arrived  with a TORN seam'];
@@ -178,7 +204,7 @@ describe('verifyTurn', () => {
 
   it('replaces an unsafe reply but keeps a verified proposal', () => {
     const result = verifyTurn(turn({ reply: 'Great news, this will be approved!' }), context, typed);
-    expect(result).toMatchObject({ reply: TEMPLATES.unsafeReply, replySource: 'TEMPLATE', proposal: { orderId: 'order-1' } });
+    expect(result).toMatchObject({ reply: TEMPLATES.checkCard, replySource: 'TEMPLATE', proposal: { orderId: 'order-1' } });
   });
 
   it("raises flags from code even when the model doesn't", () => {
@@ -193,5 +219,66 @@ describe('verifyTurn', () => {
   it('keeps flags the model raised', () => {
     const result = verifyTurn(turn({ proposal: null, flags: { injectionAttempt: false, mentionsOtherCustomerOrder: false, abusive: true, offTopic: true } }), context, typed);
     expect(result.flags).toEqual({ injectionAttempt: false, mentionsOtherCustomerOrder: false, abusive: true, offTopic: true });
+  });
+});
+
+describe('buildTurnPrompt', () => {
+  const { system, user } = buildTurnPrompt({
+    ...context,
+    card: { orderId: 'order-1', orderNumber: 'WN-4GK1VS', reason: 'DAMAGED', lines: [{ orderItemId: 'item-blue', itemName: 'Linen shirt, blue', quantity: 1, maxQuantity: 2 }] },
+    transcript: [{ role: 'CUSTOMER', content: 'the blue <b>shirt</b> is torn', typed: true }],
+  });
+
+  it("describes the customer's situation from our records", () => {
+    expect(user).toContain('<today>2026-09-27</today>');
+    expect(user).toContain('O1 order WN-4GK1VS, placed 2026-09-12, delivered 2026-09-17 (10 days ago)');
+    expect(user).toContain('O1.I1 "Linen shirt, blue": bought 2; can be claimed now: 2');
+    expect(user).toContain('O1.I2 "Linen shirt, white": bought 1; can be claimed now: 0; 1 in a request that is still open');
+    expect(user).toContain('O1.I3 "Belt": bought 1; can be claimed now: 0; 1 already refunded; final sale');
+    expect(user).toContain('O2 order WN-2HX8LD, placed 2026-09-25, not delivered yet');
+    expect(user).toContain('rr_abcdefghjkmn on 2026-09-20, order WN-4GK1VS: 1 x "Belt" (refunded)');
+    expect(user).toContain('1 x "Linen shirt, white" (being looked at by our team)');
+    expect(user).toContain('- Refunds are available within 30 days of delivery.');
+    expect(user).toContain('answered within 2 business days');
+    expect(user).toContain('<confirmation_card>\norder WN-4GK1VS: 1 x "Linen shirt, blue"; reason DAMAGED\n</confirmation_card>');
+  });
+
+  it('keeps ids, prices and delimiters out, and customer text inside its block', () => {
+    expect(user).not.toMatch(/item-blue|order-1|\$/);
+    expect(user).toContain('<conversation>\ncustomer: the blue  b shirt /b  is torn\n</conversation>');
+    expect(system).not.toMatch(/\$|500|final sale/i);
+  });
+
+  it('says when there are no earlier requests', () => {
+    expect(buildTurnPrompt({ ...context, earlierRequests: [] }).user).toContain('<earlier_requests>\nnone\n</earlier_requests>');
+  });
+});
+
+describe('model replies', () => {
+  it('rejects an unsafe reply in the output schema, so the model gets one chance to repair it', () => {
+    const parsed = assistantTurnSchema.safeParse({ ...turn({ proposal: null }), reply: 'Good news, this will be approved!' });
+    expect(parsed.success).toBe(false);
+    expect(assistantTurnSchema.safeParse({ ...turn({ proposal: null }), reply: 'Which item, O1.I1 or O2.I1?' }).success).toBe(true);
+  });
+
+  it('replaces internal refs with the names the customer sees', () => {
+    expect(replaceRefs('Is it the O1.I1 from order O1?', context.orders)).toBe('Is it the Linen shirt, blue from order WN-4GK1VS?');
+    expect(replaceRefs('That is O9.I9.', context.orders)).toBe('That is.');
+  });
+
+  it('never shows refs in the reply', () => {
+    const result = verifyTurn(turn({ proposal: null, reply: 'Is this about O1.I1?' }), context, typed);
+    expect(result).toMatchObject({ reply: 'Is this about Linen shirt, blue?', replySource: 'AI' });
+  });
+
+  it('drops yes/no chips next to a confirmation card, but keeps them otherwise', () => {
+    const chips = [{ kind: 'YES_NO' as const, value: true }, { kind: 'YES_NO' as const, value: false }];
+    expect(verifyTurn(turn({ quickReplies: chips }), context, typed).quickReplies).toEqual([]);
+    expect(verifyTurn(turn({ proposal: null, quickReplies: chips }), context, typed).quickReplies).toHaveLength(2);
+  });
+
+  it('points to the card when a reply next to a proposal cannot be shown', () => {
+    const result = verifyTurn(turn({ reply: 'Call us on +1 (555) 123-4567.' }), context, typed);
+    expect(result).toMatchObject({ reply: TEMPLATES.checkCard, replySource: 'TEMPLATE', proposalRejection: null });
   });
 });

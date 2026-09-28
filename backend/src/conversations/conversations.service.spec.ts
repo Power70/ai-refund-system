@@ -3,7 +3,9 @@ import type { StructuredResult } from '../ai/llm.types.js';
 import type { Database } from '../database/database.providers.js';
 import type { conversations } from '../database/schema.js';
 import type { OrdersService } from '../orders/orders.service.js';
+import type { PolicyService } from '../policy/policy.service.js';
 import type { CustomerMessagesService } from '../refunds/customer-messages.service.js';
+import type { RefundsService } from '../refunds/refunds.service.js';
 import type { AssistantTurn, ChatContext } from './chat-turn.js';
 import { ConversationsService, MAX_AI_TURNS, MAX_FAILED_TURNS } from './conversations.service.js';
 
@@ -14,7 +16,17 @@ const conversation = (overrides: Partial<ConversationRow> = {}) =>
   ({ id: 'conv-1', state: 'ACTIVE', mode: 'AI', turnCount: 0, failedTurns: 0, flags: NO_FLAGS, discussedItemIds: [], latestProposal: null, ...overrides }) as ConversationRow;
 
 const context: ChatContext = {
-  orders: [{ ref: 'O1', orderId: 'order-1', orderNumber: 'WN-7K3P9Q', deliveredAt: new Date(), items: [{ ref: 'O1.I1', orderItemId: 'item-1', name: 'Oxford shirt', purchased: 1, refundable: 1, pending: 0 }] }],
+  today: new Date(),
+  orders: [
+    {
+      ref: 'O1', orderId: 'order-1', orderNumber: 'WN-7K3P9Q', placedAt: new Date(), deliveredAt: new Date(),
+      items: [{ ref: 'O1.I1', orderItemId: 'item-1', name: 'Oxford shirt', purchased: 1, refundable: 1, pending: 0, refunded: 0, finalSale: false }],
+    },
+  ],
+  earlierRequests: [],
+  policyNotes: [],
+  reviewEtaBusinessDays: 2,
+  card: null,
   transcript: [{ role: 'CUSTOMER', content: 'my shirt arrived torn', typed: true }],
 };
 const turn = (overrides: Partial<AssistantTurn> = {}): AssistantTurn => ({
@@ -35,7 +47,14 @@ function setup(result: StructuredResult<AssistantTurn> = { ok: true, value: turn
     generateStructured: vi.fn(async () => result),
     callRecord: vi.fn((r: StructuredResult<unknown>, failureReason: string | null = null) => ({ provider: 'p', model: 'm', outcome: r.ok ? 'OK' : 'ERROR', attempts: 1, latencyMs: 10, failureReason })),
   };
-  const service = new TestConversationsService({} as Database, llm as unknown as LlmService, {} as OrdersService, {} as CustomerMessagesService);
+  const service = new TestConversationsService(
+    {} as Database,
+    llm as unknown as LlmService,
+    {} as OrdersService,
+    {} as CustomerMessagesService,
+    {} as RefundsService,
+    {} as PolicyService,
+  );
   return { service, llm };
 }
 const failed = (reason: 'timeout' | 'disabled'): StructuredResult<AssistantTurn> => ({ ok: false, reason, attempts: 2, latencyMs: 10 });

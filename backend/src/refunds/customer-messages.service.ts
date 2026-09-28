@@ -26,13 +26,13 @@ export function templateCustomerMessage(
     case 'DENIED':
       return `We're sorry, this request isn't eligible for a refund. ${reasons.join(' ')}`.trim();
     case 'ESCALATED':
-      return `Your request needs a review by our support team. We'll get back to you within ${reviewEtaBusinessDays} business days.`;
+      return `Thanks for your patience. We're taking a closer look at your request and will get back to you within ${reviewEtaBusinessDays} business days.`;
   }
 }
 
 /** Shown when a request couldn't be checked automatically and a person will decide it. */
 export const SYSTEM_FAILURE_CUSTOMER_MESSAGE =
-  "We couldn't finish checking your request automatically, so a member of our support team will review it and get back to you.";
+  "Thanks for your patience. We need a little more time to look at your request, and we'll get back to you as soon as possible.";
 
 export interface ResolvedItem {
   itemName: string;
@@ -168,7 +168,8 @@ const REPLY_RULES = `Rules:
 - Use only the facts in <decision>. Write names, amounts and times only as the listed placeholders, e.g. {{approved_amount}}.
 - No currency symbols, no other numbers, no links, email addresses or phone numbers.
 - Never mention internal processes, rules, checks, flags or why a request went to review.
-- Plain text, friendly and brief, at most ${MAX_CUSTOMER_REPLY_CHARS} characters.`;
+- For a request that is still being looked at, say warmly that we're taking a closer look and when they will hear back; never say why.
+- Write like a caring, professional support agent: acknowledge the customer, be clear about the outcome, and keep it brief. Plain text, at most ${MAX_CUSTOMER_REPLY_CHARS} characters.`;
 
 const DECISION_SYSTEM = `You write the message a customer reads about the decision on their refund request.\n${REPLY_RULES}`;
 const FOLLOW_UP_SYSTEM = `You answer a customer's question about the decision on their refund request.\n${REPLY_RULES}
@@ -181,7 +182,7 @@ export function decisionTemplate(brief: DecisionBrief): string {
 }
 
 export function followUpTemplate(brief: DecisionBrief): string {
-  if (brief.status === 'ESCALATED') return `Your request is with our support team, who will get back to you within ${brief.reviewEtaBusinessDays} business days.`;
+  if (brief.status === 'ESCALATED') return `We're still taking a closer look at your request and will get back to you within ${brief.reviewEtaBusinessDays} business days.`;
   const reasons = reasonsOf(brief).join(' ');
   const base = brief.status === 'APPROVED' ? 'Your refund was approved.' : "This request wasn't approved for a refund.";
   return `${base}${reasons ? ` ${reasons}` : ''} If you believe something is wrong, contact our support team and quote your request ID ${brief.requestId}.`;

@@ -95,6 +95,14 @@ const OUTCOME_LABELS: Record<PolicyOutcome, string> = {
   REVIEW: 'Needs review',
 };
 
+/**
+ * The policy's customer-facing explanations that are safe to share before a decision: reasons
+ * from item rules that allow or deny. Review rules and request rules are internal.
+ */
+export function customerPolicyNotes(policy: PolicyDocument): string[] {
+  return [...new Set(policy.lineRules.filter((rule) => rule.outcome !== 'REVIEW').map((rule) => rule.publicReason))];
+}
+
 export const GENERATED_NOTICE =
   '<!-- GENERATED from refund-policy.yaml by `npm run policy:docs` (in backend/). Do not edit by hand. -->';
 
