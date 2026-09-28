@@ -60,6 +60,7 @@ Every variable is optional; `.env.example` documents them all. Compose reads a `
 | `LLM_PROVIDER` | detected | Force `anthropic`, `openai`, `gemini`, `groq`, `openrouter` or `openai-compatible` |
 | `LLM_BASE_URL` | provider default | Any OpenAI-compatible API (DeepSeek, Mistral, Ollama…); requires `LLM_MODEL` |
 | `LLM_MODEL` | provider default | Model override |
+| `ANTHROPIC_WORKSPACE_ID` | empty | Anthropic organization-level keys only: the workspace (`wrkspc_…`) the key must name |
 | `AI_TIMEOUT_MS` | `20000` | Time budget for one AI call, including its retry and repair attempt |
 | `AI_MIN_CONFIDENCE` | `0.95` | Minimum model confidence for an automatic approval |
 | `ADMIN_TOKEN` | `admin-demo-token` | Dashboard bearer token (12+ characters); the API logs a warning while the demo token is in use |

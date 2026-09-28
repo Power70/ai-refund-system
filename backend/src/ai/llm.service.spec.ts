@@ -48,6 +48,11 @@ describe('resolveLlmConfig', () => {
     expect(resolve({ LLM_API_KEY: 'AQ.Ab8RNabc', LLM_PROVIDER: 'gemini', LLM_BASE_URL: ' ', LLM_MODEL: '' })).toMatchObject({ enabled: true, config: { provider: 'gemini' } });
   });
 
+  it('passes an Anthropic workspace ID only to Anthropic', () => {
+    expect(resolve({ LLM_API_KEY: 'sk-ant-api03-abc', ANTHROPIC_WORKSPACE_ID: 'wrkspc_01abc' })).toMatchObject({ config: { workspaceId: 'wrkspc_01abc' } });
+    expect(resolve({ LLM_API_KEY: 'gsk_abc', ANTHROPIC_WORKSPACE_ID: 'wrkspc_01abc' })).not.toHaveProperty('config.workspaceId');
+  });
+
   it('is disabled for an unrecognised key format', () => {
     expect(resolve({ LLM_API_KEY: 'abc123' })).toMatchObject({ enabled: false });
   });
@@ -169,6 +174,7 @@ describe('Anthropic adapter', () => {
     expect(call.headers['x-api-key']).toBe(KEY);
     expect(call.headers['anthropic-version']).toBe('2023-06-01');
     expect(call.headers.authorization).toBeUndefined();
+    expect(call.headers['anthropic-workspace-id']).toBeUndefined();
     expect(call.body).toMatchObject({
       model: 'claude-haiku-4-5-20251001',
       system: 'Answer.',
@@ -176,6 +182,14 @@ describe('Anthropic adapter', () => {
       tool_choice: { type: 'tool', name: 'record_answer' },
       messages: [{ role: 'user', content: 'Is it damaged?' }],
     });
+  });
+});
+
+describe('Anthropic adapter with an organization-level key', () => {
+  it('names the workspace in anthropic-workspace-id', async () => {
+    handlers.push(anthropicToolUse({ answer: 'no', confidence: 0.9 }));
+    await service('anthropic', { workspaceId: 'wrkspc_01abc' }).generateStructured(request);
+    expect(captured[0].headers['anthropic-workspace-id']).toBe('wrkspc_01abc');
   });
 });
 

@@ -24,6 +24,8 @@ export const envSchema = z.object({
   LLM_PROVIDER: optional(z.enum(['anthropic', 'openai', 'gemini', 'groq', 'openrouter', 'openai-compatible'])),
   LLM_BASE_URL: optional(z.url({ protocol: /^https?$/ })),
   LLM_MODEL: optional(z.string().min(1)),
+  // Anthropic organization-level keys (not scoped to a workspace) must name a workspace, e.g. wrkspc_01….
+  ANTHROPIC_WORKSPACE_ID: optional(z.string().regex(/^wrkspc_\w+$/, 'must look like wrkspc_…')),
   AI_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).default(20_000),
 });
 

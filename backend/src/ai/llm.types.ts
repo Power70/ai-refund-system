@@ -8,6 +8,8 @@ export interface LlmConfig {
   model: string;
   apiKey: string;
   timeoutMs: number;
+  /** Anthropic only: sent as anthropic-workspace-id for keys not scoped to a workspace. */
+  workspaceId?: string;
 }
 
 /** A single forced tool call; the tool's parameters are the output schema. */

@@ -107,7 +107,11 @@ export class AnthropicAdapter implements LlmAdapter {
     };
     const response = await postJson<MessagesResponse>(
       `${this.config.baseUrl}/v1/messages`,
-      { 'x-api-key': this.config.apiKey, 'anthropic-version': API_VERSION },
+      {
+        'x-api-key': this.config.apiKey,
+        'anthropic-version': API_VERSION,
+        ...(this.config.workspaceId ? { 'anthropic-workspace-id': this.config.workspaceId } : {}),
+      },
       body,
       request.signal,
       this.config.apiKey,

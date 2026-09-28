@@ -43,6 +43,12 @@ describe('validateEnv', () => {
     expect(env.LLM_BASE_URL).toBeUndefined();
   });
 
+  it('accepts an Anthropic workspace ID and rejects anything else there', () => {
+    expect(validateEnv({ DATABASE_URL, ANTHROPIC_WORKSPACE_ID: 'wrkspc_01AbC' }).ANTHROPIC_WORKSPACE_ID).toBe('wrkspc_01AbC');
+    expect(validateEnv({ DATABASE_URL, ANTHROPIC_WORKSPACE_ID: '' }).ANTHROPIC_WORKSPACE_ID).toBeUndefined();
+    expect(() => validateEnv({ DATABASE_URL, ANTHROPIC_WORKSPACE_ID: 'default' })).toThrow(/ANTHROPIC_WORKSPACE_ID/);
+  });
+
   it('rejects an unknown LLM_PROVIDER and a non-HTTP LLM_BASE_URL', () => {
     expect(() => validateEnv({ DATABASE_URL, LLM_PROVIDER: 'cohere' })).toThrow(/LLM_PROVIDER/);
     expect(() => validateEnv({ DATABASE_URL, LLM_BASE_URL: 'file:///etc/passwd' })).toThrow(/LLM_BASE_URL/);

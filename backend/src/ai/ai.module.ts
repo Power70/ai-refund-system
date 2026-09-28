@@ -18,6 +18,7 @@ import { LLM_ADAPTER, LLM_CONFIG, LlmService } from './llm.service.js';
           LLM_BASE_URL: config.get('LLM_BASE_URL', { infer: true }),
           LLM_MODEL: config.get('LLM_MODEL', { infer: true }),
           AI_TIMEOUT_MS: config.get('AI_TIMEOUT_MS', { infer: true }),
+          ANTHROPIC_WORKSPACE_ID: config.get('ANTHROPIC_WORKSPACE_ID', { infer: true }),
         }),
     },
     {

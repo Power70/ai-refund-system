@@ -32,7 +32,9 @@ export type LlmConfigResult = { enabled: true; config: LlmConfig } | { enabled: 
  * Resolves the provider from LLM_PROVIDER, LLM_BASE_URL or the key prefix, in that order.
  * An unrecognised setup disables AI instead of failing startup.
  */
-export function resolveLlmConfig(env: Pick<Env, 'LLM_API_KEY' | 'LLM_PROVIDER' | 'LLM_BASE_URL' | 'LLM_MODEL' | 'AI_TIMEOUT_MS'>): LlmConfigResult {
+export function resolveLlmConfig(
+  env: Pick<Env, 'LLM_API_KEY' | 'LLM_PROVIDER' | 'LLM_BASE_URL' | 'LLM_MODEL' | 'AI_TIMEOUT_MS'> & Partial<Pick<Env, 'ANTHROPIC_WORKSPACE_ID'>>,
+): LlmConfigResult {
   const apiKey = present(env.LLM_API_KEY);
   if (!apiKey) return { enabled: false, reason: 'LLM_API_KEY is not set' };
 
@@ -47,7 +49,9 @@ export function resolveLlmConfig(env: Pick<Env, 'LLM_API_KEY' | 'LLM_PROVIDER' |
   const model = present(env.LLM_MODEL) ?? defaults?.model;
   if (!baseUrl || !model) return { enabled: false, reason: 'LLM_BASE_URL and LLM_MODEL are required for an OpenAI-compatible provider' };
 
-  return { enabled: true, config: { provider, protocol: defaults?.protocol ?? 'openai', baseUrl, model, apiKey, timeoutMs: env.AI_TIMEOUT_MS } };
+  const protocol = defaults?.protocol ?? 'openai';
+  const workspaceId = protocol === 'anthropic' ? present(env.ANTHROPIC_WORKSPACE_ID) : undefined;
+  return { enabled: true, config: { provider, protocol, baseUrl, model, apiKey, timeoutMs: env.AI_TIMEOUT_MS, ...(workspaceId ? { workspaceId } : {}) } };
 }
 
 /** The trimmed value, or undefined when blank: an empty setting means "not set". */
