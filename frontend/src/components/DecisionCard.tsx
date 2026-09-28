@@ -26,18 +26,7 @@ export function DecisionCard({ request, currency }: { request: RefundRequestView
         {request.status === 'PROCESSING' ? "We're checking your request. This usually takes a few seconds." : request.customerMessage}
       </p>
 
-      <ul className="mt-3 space-y-1.5">
-        {request.lines.map((line) => (
-          <li key={line.itemName} className="flex items-center justify-between gap-2 text-sm">
-            <span>
-              {line.quantity} × {line.itemName}
-            </span>
-            <span className="inline-flex items-center gap-1 text-xs text-slate-600">
-              {LINE_OUTCOMES[line.outcome].icon} {LINE_OUTCOMES[line.outcome].label}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <RequestLines lines={request.lines} className="mt-3" />
 
       {request.approvedAmountMinor > 0 && (
         <p className="mt-3 border-t border-slate-100 pt-3 text-sm">
@@ -45,5 +34,23 @@ export function DecisionCard({ request, currency }: { request: RefundRequestView
         </p>
       )}
     </ChatCard>
+  )
+}
+
+/** Each claimed item with its outcome. */
+export function RequestLines({ lines, className = '' }: { lines: RefundRequestView['lines']; className?: string }) {
+  return (
+    <ul className={`space-y-1.5 ${className}`}>
+      {lines.map((line) => (
+        <li key={line.itemName} className="flex items-center justify-between gap-2 text-sm">
+          <span>
+            {line.quantity} × {line.itemName}
+          </span>
+          <span className="inline-flex shrink-0 items-center gap-1 text-xs text-slate-600">
+            {LINE_OUTCOMES[line.outcome].icon} {LINE_OUTCOMES[line.outcome].label}
+          </span>
+        </li>
+      ))}
+    </ul>
   )
 }

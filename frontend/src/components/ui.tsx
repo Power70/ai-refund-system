@@ -1,4 +1,4 @@
-import { IconLoader2, type Icon } from '@tabler/icons-react'
+import { IconLoader2, IconX, type Icon } from '@tabler/icons-react'
 import { useEffect, useRef, type ComponentProps, type FormEvent, type ReactNode } from 'react'
 
 export const focusRing = 'focus-visible:ring-2 focus-visible:ring-indigo-300 focus-visible:outline-none'
@@ -94,5 +94,78 @@ export function SignInLayout({ icon: HeaderIcon, iconClassName, title, subtitle,
       </form>
       {after}
     </main>
+  )
+}
+
+interface SheetProps {
+  labelledBy: string
+  /** Header content; must contain the element with id `labelledBy`. */
+  title: ReactNode
+  onClose: () => void
+  children: ReactNode
+}
+
+/**
+ * Modal sheet: full screen on phones, a right-hand panel from `sm` up. Escape or the backdrop
+ * closes it; focus moves into it on open and returns to the trigger on close.
+ */
+export function Sheet({ labelledBy, title, onClose, children }: SheetProps) {
+  const closeButton = useRef<HTMLButtonElement>(null)
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  })
+
+  // Runs once: parents re-render on polling and must not steal focus back.
+  useEffect(() => {
+    const trigger = document.activeElement as HTMLElement | null
+    const { overflow } = document.body.style
+    document.body.style.overflow = 'hidden'
+    closeButton.current?.focus()
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onCloseRef.current()
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = overflow
+      trigger?.focus({ preventScroll: true })
+    }
+  }, [])
+
+  return (
+    <div className="fixed inset-0 z-40 flex justify-end bg-slate-900/30" onClick={onClose}>
+      <aside
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={labelledBy}
+        onClick={(e) => e.stopPropagation()}
+        className="flex h-full w-full flex-col bg-slate-50 shadow-xl sm:max-w-2xl"
+      >
+        <header className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3">
+          <div className="min-w-0">{title}</div>
+          <Button variant="icon" icon={IconX} aria-label="Close" onClick={onClose} ref={closeButton} />
+        </header>
+        <div className="flex-1 space-y-4 overflow-y-auto overscroll-contain p-4">{children}</div>
+      </aside>
+    </div>
+  )
+}
+
+const DOT_TONES = {
+  ok: 'bg-emerald-500',
+  warning: 'bg-amber-500',
+  off: 'bg-slate-400',
+}
+
+/** A coloured dot with a short label, for at-a-glance status. `details` shows on hover and to screen readers. */
+export function StatusDot({ tone, label, details }: { tone: keyof typeof DOT_TONES; label: string; details?: string }) {
+  return (
+    <span role="status" title={details} className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-slate-700 ring-1 ring-slate-200">
+      <span className="relative flex size-2" aria-hidden="true">
+        {tone === 'ok' && <span className={`absolute inline-flex size-full animate-ping rounded-full opacity-60 motion-reduce:hidden ${DOT_TONES.ok}`} />}
+        <span className={`relative inline-flex size-2 rounded-full ${DOT_TONES[tone]}`} />
+      </span>
+      {label}
+      {details && <span className="sr-only">: {details}</span>}
+    </span>
   )
 }

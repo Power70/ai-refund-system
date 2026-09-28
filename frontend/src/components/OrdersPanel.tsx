@@ -1,21 +1,16 @@
-import { IconMessageCircleQuestion, IconPackage, IconTag } from '@tabler/icons-react'
+import { IconChevronRight, IconMessageCircleQuestion, IconPackage, IconTag } from '@tabler/icons-react'
 import type { Order, OrderItem } from '../api/client'
-import { formatDate, formatMoney } from '../lib/format'
-import { Button, Panel, PanelMessage } from './ui'
+import { formatDate, formatMoney, itemAvailability } from '../lib/format'
+import { Button, focusRing, Panel, PanelMessage } from './ui'
 
 interface OrdersPanelProps {
   orders: Order[] | null
   /** Null when items can't be discussed right now (e.g. the claim was already submitted). */
   onAskAbout: ((item: OrderItem) => void) | null
+  onOpen: (order: Order) => void
 }
 
-function availability(item: OrderItem): { text: string; className: string } {
-  if (item.refundableQuantity > 0) return { text: `${item.refundableQuantity} of ${item.quantity} eligible to claim`, className: 'text-slate-500' }
-  if (item.pendingQuantity > 0) return { text: 'Request in progress', className: 'text-amber-700' }
-  return { text: 'Already refunded', className: 'text-emerald-700' }
-}
-
-export function OrdersPanel({ orders, onAskAbout }: OrdersPanelProps) {
+export function OrdersPanel({ orders, onAskAbout, onOpen }: OrdersPanelProps) {
   return (
     <Panel id="orders-heading" icon={IconPackage} title="Your orders">
       {orders === null ? (
@@ -24,13 +19,22 @@ export function OrdersPanel({ orders, onAskAbout }: OrdersPanelProps) {
         <ul className="divide-y divide-slate-100">
           {orders.map((order) => (
             <li key={order.orderNumber} className="px-4 py-3">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="font-mono text-sm font-medium">{order.orderNumber}</span>
-                <span className="text-xs text-slate-500">{order.deliveredAt ? `Delivered ${formatDate(order.deliveredAt)}` : 'Not delivered yet'}</span>
-              </div>
+              <button
+                type="button"
+                onClick={() => onOpen(order)}
+                className={`-mx-2 flex w-[calc(100%+1rem)] items-center gap-2 rounded-lg px-2 py-1 text-left hover:bg-slate-50 ${focusRing}`}
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block font-mono text-sm font-medium">{order.orderNumber}</span>
+                  <span className="block text-xs text-slate-500">{order.deliveredAt ? `Delivered ${formatDate(order.deliveredAt)}` : 'On its way'}</span>
+                </span>
+                <span className="inline-flex shrink-0 items-center text-xs font-medium text-indigo-700">
+                  Details <IconChevronRight size={14} aria-hidden="true" />
+                </span>
+              </button>
               <ul className="mt-2 space-y-2">
                 {order.items.map((item) => {
-                  const status = availability(item)
+                  const status = itemAvailability(item)
                   return (
                     <li key={item.id} className="flex items-start justify-between gap-2">
                       <div className="min-w-0">

@@ -13,7 +13,7 @@ const STYLES: Record<RequestStatus, { label: string; className: string; icon: Re
 export function StatusBadge({ status, label }: { status: RequestStatus; label?: string }) {
   const style = STYLES[status]
   return (
-    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ${style.className}`}>
+    <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ring-1 ${style.className}`}>
       {style.icon}
       {label ?? style.label}
     </span>

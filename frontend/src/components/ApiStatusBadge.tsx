@@ -25,12 +25,12 @@ export function ApiStatusBadge({ state }: ApiStatusBadgeProps) {
     <span
       role="status"
       aria-live="polite"
-      className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium ring-1 ${tone}`}
+      className={`inline-flex items-center gap-1.5 rounded-full p-1.5 text-sm font-medium ring-1 sm:px-3 sm:py-1 ${tone}`}
     >
       {state === 'ok' && <IconCircleCheck size={16} aria-hidden="true" />}
       {state === 'checking' && <Spinner />}
       {(state === 'degraded' || state === 'unreachable') && <IconAlertTriangle size={16} aria-hidden="true" />}
-      {LABELS[state]}
+      <span className="sr-only sm:not-sr-only">{LABELS[state]}</span>
     </span>
   )
 }

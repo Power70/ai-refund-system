@@ -1,10 +1,10 @@
 import { IconAlertTriangle, IconCheck, IconFlag, IconGavel, IconSparkles, IconX } from '@tabler/icons-react'
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ApiError, type AdminApi, type CaseBrief } from '../../api/client'
 import { errorMessage } from '../../hooks/useSupportChat'
 import { formatCode, formatDate, formatMoney, formatTime } from '../../lib/format'
 import { StatusBadge } from '../StatusBadge'
-import { Alert, Button, inputClass, pillClass, Spinner } from '../ui'
+import { Alert, Button, inputClass, pillClass, Sheet, Spinner } from '../ui'
 
 interface CaseBriefSheetProps {
   api: AdminApi
@@ -17,7 +17,6 @@ interface CaseBriefSheetProps {
 export function CaseBriefSheet({ api, requestId, onClose, onResolved }: CaseBriefSheetProps) {
   const [brief, setBrief] = useState<CaseBrief | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const closeButton = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     let current = true
@@ -30,42 +29,22 @@ export function CaseBriefSheet({ api, requestId, onClose, onResolved }: CaseBrie
     }
   }, [api, requestId])
 
-  const onCloseRef = useRef(onClose)
-  useEffect(() => {
-    onCloseRef.current = onClose
-  })
-
-  // Runs once: the dashboard re-renders on every refresh and must not steal focus.
-  useEffect(() => {
-    closeButton.current?.focus()
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onCloseRef.current()
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
-
   const canResolve = brief?.decision?.status === 'ESCALATED' && !brief.resolution
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-slate-900/30" onClick={onClose}>
-      <aside
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="brief-heading"
-        onClick={(e) => e.stopPropagation()}
-        className="flex h-full w-full max-w-2xl flex-col bg-slate-50 shadow-xl"
-      >
-        <header className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <h2 id="brief-heading" className="truncate font-mono text-sm font-semibold">
-              {requestId}
-            </h2>
-            {brief?.decision && <StatusBadge status={brief.decision.status} />}
-            {brief?.resolution && <span className="text-xs text-slate-500">Resolved: {formatCode(brief.resolution.outcome)}</span>}
-          </div>
-          <Button variant="icon" icon={IconX} aria-label="Close" onClick={onClose} ref={closeButton} />
-        </header>
-
-        <div className="flex-1 space-y-4 overflow-y-auto p-4">
+    <Sheet
+      labelledBy="brief-heading"
+      onClose={onClose}
+      title={
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <h2 id="brief-heading" className="truncate font-mono text-sm font-semibold">
+            {requestId}
+          </h2>
+          {brief?.decision && <StatusBadge status={brief.decision.status} />}
+          {brief?.resolution && <span className="text-xs text-slate-500">Resolved: {formatCode(brief.resolution.outcome)}</span>}
+        </div>
+      }
+    >
           {error && <Alert>{error}</Alert>}
           {!brief && !error && (
             <p className="flex items-center gap-2 text-sm text-slate-500">
@@ -106,9 +85,7 @@ export function CaseBriefSheet({ api, requestId, onClose, onResolved }: CaseBrie
               <TechnicalDetails brief={brief} />
             </>
           )}
-        </div>
-      </aside>
-    </div>
+    </Sheet>
   )
 }
 

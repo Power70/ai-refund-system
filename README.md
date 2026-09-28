@@ -106,7 +106,9 @@ Approvals need the AI: an approval stands only when the AI's reading of the conv
 
 A timed walkthrough of these scenarios is in [`docs/demo-video-script.md`](docs/demo-video-script.md).
 
-After a decision, the chat keeps going: ask "why?" or "when will I get my money?" and it answers from the stored decision. The support dashboard shows every case with its transcript, the rules that fired, the AI's suggestion and an audit timeline; escalations are resolved item by item with a required note.
+After a decision, the chat keeps going: ask "why?" or "when will I get my money?" and it answers from the stored decision. The support dashboard shows every case with its transcript, the rules that fired, the AI's suggestion and an audit timeline; escalations are resolved item by item with a required note. A dot next to the dashboard title shows whether the AI is online, degraded or off.
+
+Customers can open any order under **Your orders** to see its items, totals, what can still be claimed and the refund requests made for it. The layout is mobile first: on a phone the workspace switches between **Chat**, **Orders** and **Requests** tabs, and the review queue shows each case as a card.
 
 ## Architecture
 

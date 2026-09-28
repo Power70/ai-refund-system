@@ -1,14 +1,23 @@
-import { IconAlertTriangle, IconForms, IconLogout, IconPlus, IconX } from '@tabler/icons-react'
+import { IconAlertTriangle, IconForms, IconHistory, IconLogout, IconMessages, IconPackage, IconPlus, IconX, type Icon } from '@tabler/icons-react'
 import { useCallback, useEffect, useState } from 'react'
-import { api, type Order, type QuickReply, type RefundRequestView } from '../api/client'
+import { api, type Order, type OrderItem, type QuickReply, type RefundRequestView } from '../api/client'
 import { storeId, useSupportChat } from '../hooks/useSupportChat'
 import { ChatComposer } from './ChatComposer'
 import { ChatThread } from './ChatThread'
 import { ClaimCard } from './ClaimCard'
 import { DecisionCard } from './DecisionCard'
+import { OrderDetailsSheet } from './OrderDetailsSheet'
 import { OrdersPanel } from './OrdersPanel'
 import { RequestHistory } from './RequestHistory'
-import { Button } from './ui'
+import { Button, focusRing } from './ui'
+
+type Tab = 'chat' | 'orders' | 'requests'
+
+const TABS: { id: Tab; label: string; icon: Icon }[] = [
+  { id: 'chat', label: 'Chat', icon: IconMessages },
+  { id: 'orders', label: 'Orders', icon: IconPackage },
+  { id: 'requests', label: 'Requests', icon: IconHistory },
+]
 
 interface SupportWorkspaceProps {
   firstName: string
@@ -19,6 +28,9 @@ export function SupportWorkspace({ firstName, onSignedOut }: SupportWorkspacePro
   const [orders, setOrders] = useState<Order[] | null>(null)
   const [requests, setRequests] = useState<RefundRequestView[] | null>(null)
   const [manualOpen, setManualOpen] = useState(false)
+  // Phones show one section at a time; from `lg` all are visible side by side.
+  const [tab, setTab] = useState<Tab>('chat')
+  const [openOrder, setOpenOrder] = useState<string | null>(null)
 
   const [refreshCount, setRefreshCount] = useState(0)
   useEffect(() => {
@@ -51,6 +63,17 @@ export function SupportWorkspace({ firstName, onSignedOut }: SupportWorkspacePro
     else chat.send({ answer: reply.value }, reply.label)
   }
 
+  const askAbout =
+    aiChat && !busy
+      ? (item: OrderItem) => {
+          setOpenOrder(null)
+          setTab('chat')
+          chat.send({ orderItemId: item.id }, item.name)
+        }
+      : null
+  const detailsOrder = orders?.find((o) => o.orderNumber === openOrder)
+  const inProgress = requests?.filter((r) => r.status === 'PROCESSING' || r.status === 'ESCALATED').length ?? 0
+
   const startNew = () => {
     setManualOpen(false)
     void chat.startNew()
@@ -71,25 +94,51 @@ export function SupportWorkspace({ firstName, onSignedOut }: SupportWorkspacePro
         : null
 
   return (
-    <div className="mx-auto grid max-w-6xl gap-4 p-3 sm:p-4 lg:h-[calc(100dvh-4rem)] lg:grid-cols-[20rem_1fr]">
-      <aside className="order-2 space-y-4 lg:order-1 lg:overflow-y-auto">
-        <OrdersPanel orders={orders} onAskAbout={aiChat && !busy ? (item) => chat.send({ orderItemId: item.id }, item.name) : null} />
-        <RequestHistory requests={requests} />
+    <div className="mx-auto flex max-w-6xl flex-col gap-3 p-3 sm:p-4 lg:grid lg:h-[calc(100dvh-4rem)] lg:grid-cols-[20rem_1fr] lg:gap-4">
+      <div role="tablist" aria-label="Sections" className="flex rounded-xl bg-slate-200/70 p-1 lg:hidden">
+        {TABS.map(({ id, label, icon: TabIcon }) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            id={`tab-${id}`}
+            aria-controls={`section-${id}`}
+            aria-selected={tab === id}
+            onClick={() => setTab(id)}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-sm ${focusRing} ${tab === id ? 'bg-white font-medium shadow-sm' : 'text-slate-600'}`}
+          >
+            <TabIcon size={16} aria-hidden="true" /> {label}
+            {id === 'requests' && inProgress > 0 && <span className="rounded-full bg-amber-100 px-1.5 text-xs text-amber-800">{inProgress}</span>}
+          </button>
+        ))}
+      </div>
+
+      <aside className={`space-y-4 lg:order-1 lg:block lg:overflow-y-auto ${tab === 'chat' ? 'hidden' : ''}`}>
+        <div id="section-orders" className={tab === 'orders' ? '' : 'hidden lg:block'}>
+          <OrdersPanel orders={orders} onAskAbout={askAbout} onOpen={(order) => setOpenOrder(order.orderNumber)} />
+        </div>
+        <div id="section-requests" className={tab === 'requests' ? '' : 'hidden lg:block'}>
+          <RequestHistory requests={requests} />
+        </div>
       </aside>
 
-      <section aria-label="Support chat" className="order-1 flex h-[calc(100dvh-5.5rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 lg:order-2 lg:h-auto">
+      <section
+        id="section-chat"
+        aria-label="Support chat"
+        className={`h-[calc(100dvh-9rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-slate-50 sm:h-[calc(100dvh-9.5rem)] lg:order-2 lg:flex lg:h-auto ${tab === 'chat' ? 'flex' : 'hidden'}`}
+      >
         <div className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3">
-          <p className="text-sm">
+          <p className="min-w-0 truncate text-sm">
             Hi <span className="font-medium">{firstName}</span>, how can we help?
           </p>
-          <div className="flex items-center gap-1">
+          <div className="flex shrink-0 items-center gap-1">
             {aiChat && !chat.request && !manualOpen && (
-              <Button variant="ghost" icon={IconForms} onClick={() => setManualOpen(true)}>
-                Fill in the details myself
+              <Button variant="ghost" icon={IconForms} onClick={() => setManualOpen(true)} aria-label="Fill in the details myself" title="Fill in the details myself">
+                <span className="hidden sm:inline">Fill in the details myself</span>
               </Button>
             )}
-            <Button variant="ghost" icon={IconPlus} onClick={startNew}>
-              New request
+            <Button variant="ghost" icon={IconPlus} onClick={startNew} aria-label="New request" title="New request">
+              <span className="hidden sm:inline">New request</span>
             </Button>
             <Button variant="icon" icon={IconLogout} onClick={() => void signOut()} aria-label="Sign out" />
           </div>
@@ -139,6 +188,8 @@ export function SupportWorkspace({ firstName, onSignedOut }: SupportWorkspacePro
 
         {composer && <ChatComposer placeholder={composer.placeholder} disabled={busy || chat.submitting} onSend={(text) => chat.send({ text }, text)} />}
       </section>
+
+      {detailsOrder && <OrderDetailsSheet order={detailsOrder} requests={requests} onAskAbout={askAbout} onClose={() => setOpenOrder(null)} />}
     </div>
   )
 }
