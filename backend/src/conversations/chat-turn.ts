@@ -19,8 +19,15 @@ export const assistantTurnSchema = z
     needsClarification: z.boolean(),
     proposal: z
       .object({
-        orderRef: z.string(),
-        lines: z.array(z.object({ itemRef: z.string(), quantity: z.number().int().min(1).max(99) }).strict()).min(1).max(20),
+        orderRef: z.string().describe('Order ref from <orders>, e.g. "O1"'),
+        lines: z
+          .array(
+            z
+              .object({ itemRef: z.string().describe('Full item ref from <orders>, e.g. "O1.I2"'), quantity: z.number().int().min(1).max(99) })
+              .strict(),
+          )
+          .min(1)
+          .max(20),
         reason: z.enum(REFUND_REASONS),
         evidenceQuotes: z.array(z.string().min(1).max(200)).min(1).max(3),
         confidence: z.number().min(0).max(1),
@@ -70,7 +77,7 @@ const SYSTEM_PROMPT = `You are the refund intake assistant for an online store. 
 Rules:
 - Ask at most one short question per turn. Plain text only, at most ${MAX_REPLY_CHARS} characters.
 - Never state or imply whether a refund will be approved or denied. Never mention money, amounts, prices, policies, rules or internal processes. Never include links, email addresses or phone numbers.
-- Refer to orders and items only by the refs listed in <orders>. Never invent refs.
+- Refer to orders and items only by the refs listed in <orders>: orders as "O1", items by their full ref such as "O1.I2". Never use order numbers or names as refs, and never invent refs.
 - Set proposal only when the item(s), quantity and reason are clear from what the customer typed. Otherwise set proposal to null and ask.
 - evidenceQuotes must be copied exactly, character for character, from the customer's messages and support the chosen reason.
 - quickReplies may offer up to 4 answers the customer can tap: items (by ref), reasons, or yes/no.
@@ -203,7 +210,6 @@ export const TEMPLATES = {
  */
 export function verifyTurn(turn: AssistantTurn, context: ChatContext, typedCustomerMessages: readonly string[]): VerifiedTurn {
   const itemsByRef = new Map(context.orders.flatMap((order) => order.items.map((item) => [item.ref, { order, item }] as const)));
-  const ordersByRef = new Map(context.orders.map((order) => [order.ref, order]));
 
   const quickReplies = turn.quickReplies.flatMap((chip): QuickReply[] => {
     if (chip.kind === 'ITEM') {
@@ -214,7 +220,7 @@ export function verifyTurn(turn: AssistantTurn, context: ChatContext, typedCusto
     return [{ kind: 'YES_NO', value: chip.value, label: chip.value ? 'Yes' : 'No' }];
   });
 
-  const checked = turn.proposal ? checkProposal(turn.proposal, ordersByRef, typedCustomerMessages) : { proposal: null, rejection: null, reply: null };
+  const checked = turn.proposal ? checkProposal(turn.proposal, context.orders, typedCustomerMessages) : { proposal: null, rejection: null, reply: null };
 
   const latest = typedCustomerMessages.at(-1) ?? '';
   const ownNumbers = context.orders.map((o) => o.orderNumber);
@@ -229,7 +235,7 @@ export function verifyTurn(turn: AssistantTurn, context: ChatContext, typedCusto
   return {
     reply,
     replySource: reply === turn.reply ? 'AI' : 'TEMPLATE',
-    quickReplies: checked.reply ? [] : quickReplies,
+    quickReplies: checked.reply ? fallbackChips(checked.rejection, context) : quickReplies,
     proposal: checked.proposal,
     proposalRejection: checked.rejection,
     flags,
@@ -245,21 +251,59 @@ type CheckedProposal =
   | { proposal: ProposalRecord; rejection: null; reply: null }
   | { proposal: null; rejection: ProposalRejection; reply: string };
 
+const normalizeRef = (ref: string) => ref.trim().replace(/^["'([]+|["')\]]+$/g, '').toUpperCase();
+const MAX_CHIPS = 4;
+
+/**
+ * Resolves the proposal's refs. Tolerates common model slips that stay unambiguous: an order
+ * number instead of the order ref, an item ref without its order prefix ("I2"), or a wrong
+ * order ref next to full item refs. Items from two orders, or an order ref that names a
+ * different order than the items, are rejected.
+ */
+function resolveRefs(proposal: NonNullable<AssistantTurn['proposal']>, orders: readonly ContextOrder[]) {
+  const orderKey = normalizeRef(proposal.orderRef);
+  const named = orders.find((o) => o.ref === orderKey || o.orderNumber.toUpperCase() === orderKey);
+  const items = proposal.lines.map((line) => {
+    const key = normalizeRef(line.itemRef);
+    const full = named && /^I\d+$/.test(key) ? `${named.ref}.${key}` : key;
+    for (const order of orders) {
+      const item = order.items.find((i) => i.ref === full);
+      if (item) return { order, item };
+    }
+    return null;
+  });
+  if (items.some((i) => i === null)) return null;
+  const resolved = items as { order: ContextOrder; item: ContextItem }[];
+  const order = resolved[0].order;
+  if (resolved.some((r) => r.order !== order) || (named && named !== order)) return null;
+  return { order, items: resolved.map((r) => r.item) };
+}
+
+/** Item chips offered when the model's proposal named items that could not be matched. */
+function fallbackChips(rejection: ProposalRejection | null, context: ChatContext): QuickReply[] {
+  if (rejection !== 'UNKNOWN_REF' && rejection !== 'DUPLICATE_ITEM') return [];
+  return context.orders
+    .flatMap((order) => order.items)
+    .filter((item) => item.refundable > 0)
+    .slice(0, MAX_CHIPS)
+    .map((item): QuickReply => ({ kind: 'ITEM', orderItemId: item.orderItemId, label: item.name }));
+}
+
 function checkProposal(
   proposal: NonNullable<AssistantTurn['proposal']>,
-  ordersByRef: Map<string, ContextOrder>,
+  orders: readonly ContextOrder[],
   typedCustomerMessages: readonly string[],
 ): CheckedProposal {
   const reject = (rejection: ProposalRejection, reply: string): CheckedProposal => ({ proposal: null, rejection, reply });
 
-  const order = ordersByRef.get(proposal.orderRef);
-  if (!order) return reject('UNKNOWN_REF', TEMPLATES.clarify);
-  if (new Set(proposal.lines.map((l) => l.itemRef)).size !== proposal.lines.length) return reject('DUPLICATE_ITEM', TEMPLATES.clarify);
+  const resolved = resolveRefs(proposal, orders);
+  if (!resolved) return reject('UNKNOWN_REF', TEMPLATES.clarify);
+  const { order } = resolved;
+  if (new Set(resolved.items.map((i) => i.ref)).size !== resolved.items.length) return reject('DUPLICATE_ITEM', TEMPLATES.clarify);
 
   const lines: ProposalLine[] = [];
-  for (const line of proposal.lines) {
-    const item = order.items.find((i) => i.ref === line.itemRef);
-    if (!item) return reject('UNKNOWN_REF', TEMPLATES.clarify);
+  for (const [index, line] of proposal.lines.entries()) {
+    const item = resolved.items[index];
     if (item.refundable === 0) return reject('NOTHING_REFUNDABLE', nothingRefundableMessage(item));
     if (line.quantity > item.refundable) {
       return reject('QUANTITY_TOO_HIGH', `You can claim up to ${item.refundable} of "${item.name}". How many would you like to return?`);

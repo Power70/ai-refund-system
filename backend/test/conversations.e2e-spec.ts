@@ -135,14 +135,15 @@ describe('customer conversations (e2e)', () => {
       expect((await kemi.calls()).at(-1)).toMatchObject({ outcome: 'OK', failureReason: 'EVIDENCE_NOT_FOUND' });
     });
 
-    it('ignores invented items and chips', async () => {
+    it('ignores invented items and chips, and offers the real items instead', async () => {
       const lara = await chat('lara.smith@example.com', 'WN-7XW2QD');
       fake.next(turn({
         proposal: { orderRef: 'O1', lines: [{ itemRef: 'O1.I9', quantity: 1 }], reason: 'DAMAGED', evidenceQuotes: ['dented'], confidence: 0.99 },
         quickReplies: [{ kind: 'ITEM', itemRef: 'O7.I1' }],
       }));
       const { body } = await lara.send({ text: 'my bottle came dented' }).expect(200);
-      expect(body).toMatchObject({ proposal: null, quickReplies: [] });
+      expect(body.proposal).toBeNull();
+      expect(body.quickReplies).toEqual([expect.objectContaining({ kind: 'ITEM', label: 'Steel water bottle, 750 ml' })]);
       expect(body.messages.at(-1).text).toBe('Could you tell me which item this is about and what happened with it?');
     });
 

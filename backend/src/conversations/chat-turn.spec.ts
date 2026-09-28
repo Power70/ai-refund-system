@@ -115,7 +115,7 @@ describe('verifyTurn', () => {
   });
 
   it.each([
-    ['an unknown order', { orderRef: 'O9' }, 'UNKNOWN_REF', TEMPLATES.clarify],
+    ['an unknown order and a short item ref', { orderRef: 'O9', lines: [{ itemRef: 'I1', quantity: 1 }] }, 'UNKNOWN_REF', TEMPLATES.clarify],
     ['an item from another order', { lines: [{ itemRef: 'O2.I1', quantity: 1 }] }, 'UNKNOWN_REF', TEMPLATES.clarify],
     ['an invented item', { lines: [{ itemRef: 'O1.I7', quantity: 1 }] }, 'UNKNOWN_REF', TEMPLATES.clarify],
     ['the same item twice', { lines: [{ itemRef: 'O1.I1', quantity: 1 }, { itemRef: 'O1.I1', quantity: 1 }] }, 'DUPLICATE_ITEM', TEMPLATES.clarify],
@@ -127,7 +127,26 @@ describe('verifyTurn', () => {
     ['a whitespace-only quote', { evidenceQuotes: ['   '] }, 'EVIDENCE_NOT_FOUND', TEMPLATES.evidence],
   ])('drops a proposal with %s and replies from a template', (_, change, rejection, reply) => {
     const result = verifyTurn(withProposal(change as never), context, typed);
-    expect(result).toMatchObject({ proposal: null, proposalRejection: rejection, reply, replySource: 'TEMPLATE', quickReplies: [] });
+    expect(result).toMatchObject({ proposal: null, proposalRejection: rejection, reply, replySource: 'TEMPLATE' });
+  });
+
+  it.each([
+    ['the order number as the order ref', { orderRef: 'WN-4GK1VS' }],
+    ['a short item ref', { lines: [{ itemRef: 'I1', quantity: 1 }] }],
+    ['a quoted, lower-case ref', { orderRef: '"o1"', lines: [{ itemRef: ' "o1.i1" ', quantity: 1 }] }],
+    ['a wrong order ref next to a full item ref', { orderRef: 'O9' }],
+  ])('resolves %s to the same item', (_, change) => {
+    const result = verifyTurn(withProposal(change as never), context, typed);
+    expect(result).toMatchObject({ proposalRejection: null, proposal: { orderId: 'order-1', lines: [{ orderItemId: 'item-blue' }] } });
+  });
+
+  it('offers the refundable items as chips when the proposed item cannot be matched', () => {
+    const result = verifyTurn(withProposal({ lines: [{ itemRef: 'O1.I7', quantity: 1 }] }), context, typed);
+    expect(result.quickReplies).toEqual([
+      { kind: 'ITEM', orderItemId: 'item-blue', label: 'Linen shirt, blue' },
+      { kind: 'ITEM', orderItemId: 'item-mug', label: 'Mug' },
+    ]);
+    expect(verifyTurn(withProposal({ evidenceQuotes: ['the shirt exploded'] }), context, typed).quickReplies).toEqual([]);
   });
 
   it('accepts only evidence from typed messages, not from chips or the assistant', () => {
