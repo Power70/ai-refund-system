@@ -108,7 +108,7 @@ A timed walkthrough of these scenarios is in [`docs/demo-video-script.md`](docs/
 
 After a decision, the chat keeps going: ask "why?" or "when will I get my money?" and it answers from the stored decision. The support dashboard shows every case with its transcript, the rules that fired, the AI's suggestion and an audit timeline; escalations are resolved item by item with a required note. A dot next to the dashboard title shows whether the AI is online, degraded or off.
 
-Customers can open any order under **Your orders** to see its items, totals, what can still be claimed and the refund requests made for it. Each request under **My requests** opens with its latest outcome, including a reviewer's decision made after the page loaded. The layout is mobile first: on a phone the workspace switches between **Chat**, **Orders** and **Requests** tabs, and the review queue shows each case as a card.
+Customers can open any order under **Your orders** to see its items, totals, what can still be claimed and the refund requests made for it. Each request under **My requests** opens with its latest outcome, including a reviewer's decision made after the page loaded. A request where only some items were refunded, by the policy or a reviewer, shows as **Partly approved** rather than *Approved*; the stored decision keeps the policy's status. The layout is mobile first: on a phone the workspace switches between **Chat**, **Orders** and **Requests** tabs, and the review queue shows each case as a card.
 
 ## Architecture
 

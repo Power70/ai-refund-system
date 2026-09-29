@@ -1,5 +1,7 @@
 export type RefundReason = 'DAMAGED' | 'WRONG_ITEM' | 'NOT_AS_DESCRIBED' | 'CHANGED_MIND' | 'OTHER'
 export type RequestStatus = 'PROCESSING' | 'APPROVED' | 'DENIED' | 'ESCALATED'
+/** What the customer sees: an approval that left some items unrefunded is partial. */
+export type CustomerRequestStatus = RequestStatus | 'PARTIALLY_APPROVED'
 export type HealthStatus = 'ok' | 'degraded'
 
 export interface OrderItem {
@@ -62,7 +64,7 @@ export interface Conversation {
 export interface RefundRequestView {
   requestId: string
   orderNumber: string
-  status: RequestStatus
+  status: CustomerRequestStatus
   customerMessage: string | null
   approvedAmountMinor: number
   lines: { itemName: string; quantity: number; outcome: 'REFUNDED' | 'NOT_REFUNDED' | 'UNDER_REVIEW' | 'PROCESSING' }[]

@@ -95,6 +95,42 @@ describe('submitting a claim from chat (e2e)', () => {
     expect((await ada.submit(body).expect(409)).body.code).toBe('CONVERSATION_ALREADY_SUBMITTED');
   });
 
+  it('shows an approval that refunds only some items as partly approved', async () => {
+    const [femi] = await db.select().from(schema.customers).where(eq(schema.customers.email, 'femi.johnson@example.com'));
+    const deliveredAt = new Date(Date.now() - 5 * 86_400_000);
+    const [order] = await db
+      .insert(schema.orders)
+      .values({ orderNumber: 'WN-PART01', customerId: femi.id, currency: 'USD', placedAt: new Date(deliveredAt.getTime() - 2 * 86_400_000), deliveredAt })
+      .returning();
+    await db.insert(schema.orderItems).values([
+      { orderId: order.id, sku: 'SCARF-WOOL', name: 'Wool scarf', category: 'apparel', unitPricePaidMinor: 3000, quantity: 1, finalSale: false },
+      { orderId: order.id, sku: 'SOCKS-CLR', name: 'Clearance socks', category: 'apparel', unitPricePaidMinor: 1000, quantity: 1, finalSale: true },
+    ]);
+
+    const client = await customer('femi.johnson@example.com', 'WN-PART01');
+    const chat = await client.startChat();
+    fake.next((req: ToolCallRequest) => {
+      const scarf = refFor(req, 'Wool scarf');
+      const socks = refFor(req, 'Clearance socks');
+      return turn({
+        reply: 'Please check the details below.',
+        needsClarification: false,
+        proposal: { orderRef: scarf.orderRef, lines: [{ itemRef: scarf.itemRef, quantity: 1 }, { itemRef: socks.itemRef, quantity: 1 }], reason: 'CHANGED_MIND', evidenceQuotes: ["don't need the scarf or the socks"], confidence: 0.98 },
+      });
+    });
+    await client.say(chat, "I don't need the scarf or the socks any more").expect(200);
+
+    const lines = [{ itemId: client.itemId('Wool scarf'), quantity: 1 }, { itemId: client.itemId('Clearance socks'), quantity: 1 }];
+    const res = await client.submit({ orderNumber: 'WN-PART01', reason: 'CHANGED_MIND', lines, conversationId: chat }).expect(201);
+    expect(res.body).toMatchObject({ status: 'PARTIALLY_APPROVED', approvedAmountMinor: 3000 });
+    expect(res.body.lines).toEqual([
+      { itemName: 'Clearance socks', quantity: 1, outcome: 'NOT_REFUNDED' },
+      { itemName: 'Wool scarf', quantity: 1, outcome: 'REFUNDED' },
+    ]);
+    // The stored decision keeps the policy's status; only the customer's view distinguishes it.
+    expect((await decisionOf(res.body.requestId)).decision.status).toBe('APPROVED');
+  });
+
   it('sends the claim to a person when the customer changes the reason', async () => {
     const kemi = await customer('kemi.adeyemi@example.com', 'WN-3VH9TL');
     const chat = await kemi.startChat();

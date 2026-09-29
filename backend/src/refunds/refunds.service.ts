@@ -165,7 +165,9 @@ export class RefundsService implements OnApplicationShutdown {
       .where(eq(refundRequestLines.requestId, request.id))
       .orderBy(orderItems.name);
 
-    const status = resolution ? (resolution.outcome === 'DENIED' ? 'DENIED' : 'APPROVED') : (decision?.status ?? 'PROCESSING');
+    const outcome = resolution ? (resolution.outcome === 'DENIED' ? 'DENIED' : 'APPROVED') : (decision?.status ?? 'PROCESSING');
+    // An approval that left some items unrefunded, by the policy or a reviewer, must not read as a full one.
+    const status = outcome === 'APPROVED' && lines.some((l) => l.status === 'NOT_REFUNDED') ? 'PARTIALLY_APPROVED' : outcome;
     return {
       requestId: request.publicId,
       orderNumber: row.orderNumber,

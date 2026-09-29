@@ -136,7 +136,7 @@ describe('admin resolution API (e2e)', () => {
 
     it('shows the customer the result without the internal note', async () => {
       const { body } = await grace.get(`/${ids.grace}`).expect(200);
-      expect(body).toMatchObject({ status: 'APPROVED', approvedAmountMinor: 8000, customerMessage: resolved.resolution.customerMessage });
+      expect(body).toMatchObject({ status: 'PARTIALLY_APPROVED', approvedAmountMinor: 8000, customerMessage: resolved.resolution.customerMessage });
       expect(body.lines).toEqual([
         { itemName: 'Linen shirt, blue', quantity: 1, outcome: 'REFUNDED' },
         { itemName: 'Linen shirt, white', quantity: 1, outcome: 'NOT_REFUNDED' },

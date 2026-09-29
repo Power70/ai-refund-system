@@ -94,8 +94,9 @@ describe('submitting a claim', () => {
 })
 
 describe('decision and order details', () => {
-  it('shows each item with its own outcome', async () => {
+  it('shows a partial approval as such, with the outcome of each item', async () => {
     const partial = requestView({
+      status: 'PARTIALLY_APPROVED',
       approvedAmountMinor: 4000,
       lines: [
         { itemName: 'Canvas belt, navy', quantity: 1, outcome: 'NOT_REFUNDED' },
@@ -107,6 +108,8 @@ describe('decision and order details', () => {
     renderWorkspace()
 
     const decision = await screen.findByRole('region', { name: /Refund request/ })
+    expect(within(decision).getByText('Partly approved')).toBeInTheDocument()
+    expect(within(decision).queryByText('Approved')).not.toBeInTheDocument()
     expect(within(decision).getByText('1 × Canvas belt, navy').parentElement).toHaveTextContent('Not refunded')
     expect(within(decision).getByText('1 × Polo shirt, green').parentElement).toHaveTextContent('Refunded')
     expect(within(decision).getByText('Refund amount:')).toHaveTextContent('$40.00')

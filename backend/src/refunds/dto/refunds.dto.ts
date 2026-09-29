@@ -51,7 +51,7 @@ export class CustomerRequestLineViewDto {
 export class CustomerRequestViewDto {
   @ApiProperty({ example: 'rr_7k3p9qa2mx4d' }) requestId: string;
   @ApiProperty({ example: 'WN-7K3P9Q' }) orderNumber: string;
-  @ApiProperty({ enum: ['PROCESSING', 'APPROVED', 'DENIED', 'ESCALATED'] }) status: string;
+  @ApiProperty({ enum: ['PROCESSING', 'APPROVED', 'PARTIALLY_APPROVED', 'DENIED', 'ESCALATED'], description: 'PARTIALLY_APPROVED: approved, but some items were not refunded' }) status: string;
   @ApiProperty({ nullable: true, type: String }) customerMessage: string | null;
   @ApiProperty({ example: 4999, description: 'Cents' }) approvedAmountMinor: number;
   @ApiProperty({ type: [CustomerRequestLineViewDto] }) lines: CustomerRequestLineViewDto[];
