@@ -1,7 +1,7 @@
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import request from 'supertest';
 import { createTestApp } from './create-test-app.js';
-import { customerClient, prepareDemoDatabase, type TestDatabase } from './support/test-app.js';
+import { CSRF, customerClient, prepareDemoDatabase, type TestDatabase } from './support/test-app.js';
 
 const ADMIN = { Authorization: 'Bearer admin-demo-token' };
 const QUEUE = '/api/v1/admin/refund-requests';
@@ -52,6 +52,34 @@ describe('admin dashboard API (e2e)', () => {
       }
       await request(app.getHttpServer()).get(QUEUE).set('X-Forwarded-For', '192.0.2.99').set(ADMIN).expect(429);
       await request(app.getHttpServer()).get(QUEUE).set('X-Forwarded-For', '192.0.2.100').set(ADMIN).expect(200);
+    });
+
+    it('exchanges the token for an httpOnly session cookie that survives a reload and ends on sign-out', async () => {
+      const server = app.getHttpServer();
+      const SESSION = '/api/v1/admin/session';
+      await request(server).post(SESSION).set('X-Forwarded-For', '192.0.2.5').send({ token: 'admin-demo-token' }).expect(403); // CSRF header required
+      await request(server).post(SESSION).set('X-Forwarded-For', '192.0.2.5').set(CSRF).send({ token: 'wrong-token-1234' }).expect(401);
+      const signedIn = await request(server).post(SESSION).set('X-Forwarded-For', '192.0.2.5').set(CSRF).send({ token: 'admin-demo-token' }).expect(200);
+
+      const setCookie = ([] as string[]).concat(signedIn.headers['set-cookie'] ?? []).find((c) => c.startsWith('rs_admin='))!;
+      expect(setCookie).toMatch(/HttpOnly/);
+      expect(setCookie).toMatch(/SameSite=Strict/);
+      expect(setCookie).toMatch(/Path=\/api\/v1\/admin/);
+      const cookie = setCookie.split(';')[0];
+
+      // A reload restores the session, and the cookie alone opens the dashboard API.
+      await request(server).get(SESSION).set('Cookie', cookie).expect(204);
+      await request(server).get(QUEUE).set('Cookie', cookie).expect(200);
+      await request(server).get(SESSION).expect(401);
+
+      const signedOut = await request(server).delete(SESSION).set('Cookie', cookie).set(CSRF).expect(204);
+      expect(([] as string[]).concat(signedOut.headers['set-cookie'] ?? []).join()).toMatch(/rs_admin=;/);
+    });
+
+    it("never accepts a customer's session token as the admin cookie", async () => {
+      const ada = await customerClient(app, 'ada.okafor@example.com', 'WN-7K3P9Q');
+      const token = ada.cookie.split('=').slice(1).join('=');
+      await request(app.getHttpServer()).get(QUEUE).set('Cookie', `rs_admin=${token}`).expect(401);
     });
   });
 

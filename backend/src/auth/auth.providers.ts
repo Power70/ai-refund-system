@@ -12,6 +12,8 @@ export const LOGIN_FAILURES = Symbol('LOGIN_FAILURES');
 export const ADMIN_FAILURES = Symbol('ADMIN_FAILURES');
 
 export const DEMO_ADMIN_TOKEN = 'admin-demo-token';
+/** docker-compose's default, so demo sessions survive an API restart. */
+export const DEMO_SESSION_SECRET = 'demo-session-secret-change-me-in-production';
 const FIFTEEN_MINUTES = 15 * 60_000;
 const logger = new Logger('Auth');
 
@@ -21,6 +23,7 @@ export const authProviders: Provider[] = [
     inject: [ConfigService],
     useFactory: (config: ConfigService<Env, true>): string => {
       const configured = config.get('SESSION_SECRET', { infer: true });
+      if (configured === DEMO_SESSION_SECRET) logger.warn('SESSION_SECRET is the public demo value. Set your own for anything beyond a local demo.');
       if (configured) return configured;
       logger.warn('SESSION_SECRET not set: using a random secret. Customer sessions end when the API restarts.');
       return randomBytes(32).toString('base64url');

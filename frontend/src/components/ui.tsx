@@ -146,13 +146,13 @@ export function Sheet({ labelledBy, title, onClose, children }: SheetProps) {
   }, [])
 
   return (
-    <div className="fixed inset-0 z-40 flex justify-end bg-slate-900/30" onClick={onClose}>
+    <div className="fixed inset-0 z-40 flex animate-backdrop-in justify-end bg-slate-900/30 motion-reduce:animate-none" onClick={onClose}>
       <aside
         role="dialog"
         aria-modal="true"
         aria-labelledby={labelledBy}
         onClick={(e) => e.stopPropagation()}
-        className="flex h-full w-full flex-col bg-slate-50 shadow-xl sm:max-w-2xl"
+        className="flex h-full w-full animate-sheet-in flex-col bg-slate-50 shadow-xl motion-reduce:animate-none sm:max-w-2xl"
       >
         <header className="flex items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3">
           <div className="min-w-0">{title}</div>

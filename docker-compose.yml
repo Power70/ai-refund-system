@@ -47,8 +47,8 @@ services:
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER:-refund}:${POSTGRES_PASSWORD:-refund_demo_password}@db:5432/${POSTGRES_DB:-refund_support}
       POLICY_FILE: /app/policy/refund-policy.yaml
-      # Signs customer session cookies. Empty = a random secret per start (sessions reset on restart).
-      SESSION_SECRET: ${SESSION_SECRET:-}
+      # Signs customer and dashboard session cookies. Empty = a public demo value (with a warning).
+      SESSION_SECRET: ${SESSION_SECRET:-demo-session-secret-change-me-in-production}
       # Support dashboard token. Empty = the public demo token "admin-demo-token" (with a warning).
       ADMIN_TOKEN: ${ADMIN_TOKEN:-}
       # Any supported provider key; the provider is detected from its prefix. Empty = AI disabled.

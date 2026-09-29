@@ -4,7 +4,7 @@ import { LlmService } from '../ai/llm.service.js';
 import { domainErrors } from '../common/domain-exception.js';
 import { firstNameOf } from '../common/format.js';
 import { DATABASE, type Database } from '../database/database.providers.js';
-import { aiCalls, conversationMessages, conversations, customers, orderItems, orders, refundRequests, type ConversationFlags } from '../database/schema.js';
+import { aiCalls, conversationMessages, conversations, customers, decisions, orderItems, orders, refundRequests, reviewResolutions, type ConversationFlags } from '../database/schema.js';
 import { OrdersService } from '../orders/orders.service.js';
 import { customerPolicyNotes } from '../policy/policy-docs.js';
 import { REASON_LABELS, REFUND_REASONS } from '../policy/policy-schema.js';
@@ -26,7 +26,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const PENDING_STALE_MS = 60_000;
 
 const MESSAGES = {
-  greetingAi: (firstName: string) => `Hi ${firstName}, I can help with a refund. Tell me what happened, or pick an item from your orders.`,
   greetingManual: (firstName: string) => `Hi ${firstName}, choose the item, quantity and reason in the form below and we'll take it from there.`,
   manual: 'Please use the form below to choose the item, quantity and reason.',
   aiFailed: "Sorry, I didn't quite get that. Which item is this about, and what went wrong?",
@@ -90,9 +89,11 @@ export class ConversationsService {
 
     const id = await this.db.transaction(async (tx) => {
       const [conversation] = await tx.insert(conversations).values({ customerId, mode, handoverReason: mode === 'MANUAL' ? 'AI_DISABLED' : null, createdAt: now, updatedAt: now }).returning({ id: conversations.id });
-      const structured: AssistantStructured = { replyTo: null, quickReplies: [], replySource: 'TEMPLATE' };
-      const greeting = mode === 'AI' ? MESSAGES.greetingAi(firstName) : MESSAGES.greetingManual(firstName);
-      await tx.insert(conversationMessages).values({ conversationId: conversation.id, role: 'ASSISTANT', content: greeting, structured, createdAt: now });
+      // The app greets the customer itself; only the form-based flow needs an opening line.
+      if (mode === 'MANUAL') {
+        const structured: AssistantStructured = { replyTo: null, quickReplies: [], replySource: 'TEMPLATE' };
+        await tx.insert(conversationMessages).values({ conversationId: conversation.id, role: 'ASSISTANT', content: MESSAGES.greetingManual(firstName), structured, createdAt: now });
+      }
       return conversation.id;
     });
     return (await this.view(customerId, id))!;
@@ -309,7 +310,7 @@ export class ConversationsService {
 
   /** What the assistant knows for one turn, all read from our own records. */
   protected async loadContext(customerId: string, conversation: ConversationRow, now = new Date()): Promise<ChatContext> {
-    const [rows, requests, policy, transcript] = await Promise.all([
+    const [rows, requests, explanations, policy, transcript] = await Promise.all([
       this.db
         .select({ order: orders, item: orderItems })
         .from(orders)
@@ -317,6 +318,12 @@ export class ConversationsService {
         .where(eq(orders.customerId, customerId))
         .orderBy(asc(orders.placedAt), asc(orderItems.name)),
       this.refunds.list(customerId),
+      this.db
+        .select({ publicId: refundRequests.publicId, trace: decisions.ruleTrace, status: decisions.status, resolutionId: reviewResolutions.id })
+        .from(refundRequests)
+        .innerJoin(decisions, eq(decisions.requestId, refundRequests.id))
+        .leftJoin(reviewResolutions, eq(reviewResolutions.requestId, refundRequests.id))
+        .where(eq(refundRequests.customerId, customerId)),
       this.policies.activePolicy(now),
       this.db
         .select({ role: conversationMessages.role, content: conversationMessages.content, typed: conversationMessages.typed })
@@ -343,11 +350,33 @@ export class ConversationsService {
       });
     }
 
+    // What the customer was told: the policy's explanations for an automatic decision (none while under review).
+    const explanationsById = new Map(
+      explanations.map((e) => [
+        e.publicId,
+        {
+          reviewed: e.resolutionId !== null,
+          reasons: e.resolutionId === null && e.status !== 'ESCALATED' ? [...new Set((e.trace?.lines ?? []).map((l) => l.publicReason).filter((r): r is string => !!r))] : [],
+        },
+      ]),
+    );
+
     const proposal = conversation.latestProposal as ProposalRecord | null;
     return {
       today: now,
       orders: [...byOrder.values()],
-      earlierRequests: requests.slice(0, MAX_EARLIER_REQUESTS).map((r) => ({ requestId: r.requestId, orderNumber: r.orderNumber, createdAt: new Date(r.createdAt), lines: r.lines })),
+      earlierRequests: requests.slice(0, MAX_EARLIER_REQUESTS).map((r) => {
+        const explanation = explanationsById.get(r.requestId);
+        return {
+          requestId: r.requestId,
+          orderNumber: r.orderNumber,
+          createdAt: new Date(r.createdAt),
+          status: r.status,
+          lines: r.lines,
+          reasons: explanation?.reasons ?? [],
+          reviewed: explanation?.reviewed ?? false,
+        };
+      }),
       policyNotes: customerPolicyNotes(policy.document),
       reviewEtaBusinessDays: policy.document.reviewEtaBusinessDays,
       card: proposal ? { orderId: proposal.orderId, orderNumber: proposal.orderNumber, reason: proposal.reason, lines: proposal.lines } : null,

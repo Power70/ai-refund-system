@@ -83,8 +83,14 @@ export interface EarlierRequest {
   requestId: string;
   orderNumber: string;
   createdAt: Date;
+  /** The customer-facing status: PROCESSING, ESCALATED, APPROVED, PARTIALLY_APPROVED or DENIED. */
+  status: string;
   /** outcome: REFUNDED, NOT_REFUNDED, UNDER_REVIEW or PROCESSING. */
   lines: { itemName: string; quantity: number; outcome: string }[];
+  /** The policy's explanations the customer was given with an automatic decision. */
+  reasons: string[];
+  /** A support person made the final decision. */
+  reviewed: boolean;
 }
 
 /** Everything the assistant may use for one turn. All of it comes from our own records. */
@@ -114,6 +120,7 @@ Preparing a refund request
 - Pick the reason from <reasons> that best fits what actually happened, using the meanings given there. If the customer tapped a reason but then describes something that fits another one better, use the one that fits.
 - Never label or classify the customer's problem for them ("that's a not-as-described issue", "that counts as damage"). Reflect what happened in plain, everyday words ("the mug came in a different colour from the one you ordered"). The card shows the reason; if it differs from the one they picked, mention it once using its label exactly as written in <reasons> and let them know they can change it on the card.
 - If an item cannot be claimed right now (nothing left to claim, or a request for it is already in progress), say so kindly and point them to what they can do instead.
+- When they ask about an earlier request, give its outcome exactly as <earlier_requests> states it, and explain it with the reason given there (the order dates in <customer_orders> can help). Never say a request is still being looked at unless it says so. Describe outcomes as refunded, partly refunded or not refunded.
 - You may explain the refund policy in <refund_policy> in general terms and relate it to their dates, for example how long ago an order was delivered. Never say or hint how this particular request will turn out: that is decided after they submit.
 
 Writing replies
@@ -140,6 +147,15 @@ const REASON_MEANINGS: Record<RefundReason, string> = {
   NOT_AS_DESCRIBED: 'the right product, but it does not match its description, for example material, features or quality',
   CHANGED_MIND: 'nothing is wrong with it; the customer no longer wants it',
   OTHER: 'none of the above',
+};
+
+// Worded without "approved"/"denied", which replies may not use.
+const REQUEST_STATUS_TEXT: Record<string, string> = {
+  PROCESSING: 'still being processed',
+  ESCALATED: 'still being looked at by our team',
+  APPROVED: 'refunded',
+  PARTIALLY_APPROVED: 'partly refunded',
+  DENIED: 'not refunded',
 };
 
 const LINE_OUTCOME_TEXT: Record<string, string> = {
@@ -176,7 +192,8 @@ export function buildTurnPrompt(context: ChatContext): { system: string; user: s
     ? context.earlierRequests
         .map((r) => {
           const lines = r.lines.map((l) => `${l.quantity} x "${clean(l.itemName)}" (${LINE_OUTCOME_TEXT[l.outcome] ?? 'being processed'})`).join(', ');
-          return `${r.requestId} on ${isoDate(r.createdAt)}, order ${r.orderNumber}: ${lines}`;
+          const why = r.reviewed ? ' Decided by our support team after a closer look.' : r.reasons.length ? ` Reason given: ${r.reasons.join(' ')}` : '';
+          return `${r.requestId} on ${isoDate(r.createdAt)}, order ${r.orderNumber}: ${REQUEST_STATUS_TEXT[r.status] ?? 'still being processed'}. Items: ${lines}.${why}`;
         })
         .join('\n')
     : 'none';

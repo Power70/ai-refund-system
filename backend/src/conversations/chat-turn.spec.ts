@@ -101,8 +101,10 @@ const context: ChatContext = {
     { ref: 'O2', orderId: 'order-2', orderNumber: 'WN-2HX8LD', placedAt: new Date('2026-09-25T10:00:00Z'), deliveredAt: null, items: [item('O2.I1', 'item-mug', 'Mug', { purchased: 1, refundable: 1 })] },
   ],
   earlierRequests: [
-    { requestId: 'rr_abcdefghjkmn', orderNumber: 'WN-4GK1VS', createdAt: new Date('2026-09-20T09:00:00Z'), lines: [{ itemName: 'Belt', quantity: 1, outcome: 'REFUNDED' }] },
-    { requestId: 'rr_bcdefghjkmnp', orderNumber: 'WN-4GK1VS', createdAt: new Date('2026-09-26T09:00:00Z'), lines: [{ itemName: 'Linen shirt, white', quantity: 1, outcome: 'UNDER_REVIEW' }] },
+    { requestId: 'rr_abcdefghjkmn', orderNumber: 'WN-4GK1VS', createdAt: new Date('2026-09-20T09:00:00Z'), status: 'APPROVED', lines: [{ itemName: 'Belt', quantity: 1, outcome: 'REFUNDED' }], reasons: ['Damaged items within 30 days qualify.'], reviewed: false },
+    { requestId: 'rr_bcdefghjkmnp', orderNumber: 'WN-4GK1VS', createdAt: new Date('2026-09-26T09:00:00Z'), status: 'ESCALATED', lines: [{ itemName: 'Linen shirt, white', quantity: 1, outcome: 'UNDER_REVIEW' }], reasons: [], reviewed: false },
+    { requestId: 'rr_cdefghjkmnpq', orderNumber: 'WN-2HX8LD', createdAt: new Date('2026-09-27T09:00:00Z'), status: 'DENIED', lines: [{ itemName: 'Mug', quantity: 1, outcome: 'NOT_REFUNDED' }], reasons: ['Refunds are available within 30 days of delivery.'], reviewed: false },
+    { requestId: 'rr_defghjkmnpqr', orderNumber: 'WN-2HX8LD', createdAt: new Date('2026-09-27T10:00:00Z'), status: 'PARTIALLY_APPROVED', lines: [{ itemName: 'Mug', quantity: 1, outcome: 'REFUNDED' }], reasons: [], reviewed: true },
   ],
   policyNotes: ['Refunds are available within 30 days of delivery.', 'Final-sale items are not eligible for a refund.'],
   reviewEtaBusinessDays: 2,
@@ -236,8 +238,10 @@ describe('buildTurnPrompt', () => {
     expect(user).toContain('O1.I2 "Linen shirt, white": bought 1; can be claimed now: 0; 1 in a request that is still open');
     expect(user).toContain('O1.I3 "Belt": bought 1; can be claimed now: 0; 1 already refunded; final sale');
     expect(user).toContain('O2 order WN-2HX8LD, placed 2026-09-25, not delivered yet');
-    expect(user).toContain('rr_abcdefghjkmn on 2026-09-20, order WN-4GK1VS: 1 x "Belt" (refunded)');
-    expect(user).toContain('1 x "Linen shirt, white" (being looked at by our team)');
+    expect(user).toContain('rr_abcdefghjkmn on 2026-09-20, order WN-4GK1VS: refunded. Items: 1 x "Belt" (refunded). Reason given: Damaged items within 30 days qualify.');
+    expect(user).toContain('rr_bcdefghjkmnp on 2026-09-26, order WN-4GK1VS: still being looked at by our team. Items: 1 x "Linen shirt, white" (being looked at by our team).\n');
+    expect(user).toContain('rr_cdefghjkmnpq on 2026-09-27, order WN-2HX8LD: not refunded. Items: 1 x "Mug" (not refunded). Reason given: Refunds are available within 30 days of delivery.');
+    expect(user).toContain('rr_defghjkmnpqr on 2026-09-27, order WN-2HX8LD: partly refunded. Items: 1 x "Mug" (refunded). Decided by our support team after a closer look.');
     expect(user).toContain('- Refunds are available within 30 days of delivery.');
     expect(user).toContain('answered within 2 business days');
     expect(user).toContain('<confirmation_card>\norder WN-4GK1VS: 1 x "Linen shirt, blue"; reason DAMAGED\n</confirmation_card>');

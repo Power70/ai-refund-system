@@ -151,7 +151,7 @@ describe('submitting a claim from chat (e2e)', () => {
       return body;
     });
     expect(brief.conversation).toMatchObject({ conversationId: chat, mode: 'AI', handoverReason: null, evidenceQuotes: ["don't like the colour"], priorFlaggedConversation: false });
-    expect(brief.conversation.transcript.map((m: { role: string; typed: boolean }) => [m.role, m.typed])).toEqual([['ASSISTANT', false], ['CUSTOMER', true], ['ASSISTANT', false]]);
+    expect(brief.conversation.transcript.map((m: { role: string; typed: boolean }) => [m.role, m.typed])).toEqual([['CUSTOMER', true], ['ASSISTANT', false]]);
     expect(brief.claim).toEqual({
       proposed: { reason: 'CHANGED_MIND', confidence: 0.98, lines: [{ itemName: 'Polo shirt, green', quantity: 1 }] },
       confirmed: { reason: 'DAMAGED', lines: [{ itemName: 'Polo shirt, green', quantity: 1 }] },

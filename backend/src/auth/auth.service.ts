@@ -5,7 +5,7 @@ import type { SlidingFailureWindow } from '../common/rate-limit.js';
 import { DATABASE, type Database } from '../database/database.providers.js';
 import { customers, orders } from '../database/schema.js';
 import { ADMIN_FAILURES, ADMIN_TOKEN, LOGIN_FAILURES, SESSION_SECRET } from './auth.providers.js';
-import { constantTimeEquals, SESSION_TTL_SECONDS, signSessionToken, verifySessionToken } from './session-token.js';
+import { constantTimeEquals, issueSession, renewSession, verifySessionToken, type IssuedToken } from './session-token.js';
 
 /** Same message for every sign-in failure, so responses never reveal which part was wrong. */
 export const SIGN_IN_FAILED = "We couldn't find an order with those details.";
@@ -19,8 +19,17 @@ export interface IssuedSession {
 
 export type AdminCheck = 'ok' | 'invalid' | 'locked';
 
+export type SessionKind = 'customer' | 'admin';
 
-/** Customer sessions (email + order number) and admin token checks. */
+/** A verified session: its subject, and a renewed token when the sliding window is due. */
+export interface VerifiedSession {
+  sub: string;
+  renewed: IssuedToken | null;
+}
+
+const ADMIN_SUBJECT = 'admin';
+
+/** Customer sessions (email + order number), admin sessions and admin token checks. */
 @Injectable()
 export class AuthService {
   constructor(
@@ -44,14 +53,27 @@ export class AuthService {
       throw new NotFoundException(SIGN_IN_FAILED);
     }
 
-    const iat = Math.floor(now.getTime() / 1000);
-    const exp = iat + SESSION_TTL_SECONDS;
-    return { token: signSessionToken({ sub: match.id, iat, exp }, this.sessionSecret), firstName: firstNameOf(match.name), expiresAt: new Date(exp * 1000) };
+    return { ...issueSession(match.id, this.secretFor('customer'), now), firstName: firstNameOf(match.name) };
   }
 
   /** Customer id for a valid, unexpired session token, otherwise null. */
   verifySession(token: string | undefined, now = new Date()): string | null {
-    return token ? (verifySessionToken(token, this.sessionSecret, now)?.sub ?? null) : null;
+    return this.session('customer', token, now)?.sub ?? null;
+  }
+
+  /** Verifies a session cookie of either kind; admin sessions must name the admin subject. */
+  session(kind: SessionKind, token: string | undefined, now = new Date()): VerifiedSession | null {
+    if (!token) return null;
+    const secret = this.secretFor(kind);
+    const payload = verifySessionToken(token, secret, now);
+    if (!payload || (kind === 'admin') !== (payload.sub === ADMIN_SUBJECT)) return null;
+    return { sub: payload.sub, renewed: renewSession(payload, secret, now) };
+  }
+
+  /** Exchanges the admin token for a session cookie, under the same per-IP lock as the header. */
+  startAdminSession(adminToken: string, ip: string, now = new Date()): { result: AdminCheck; session: IssuedToken | null } {
+    const result = this.checkAdmin(`Bearer ${adminToken}`, ip);
+    return { result, session: result === 'ok' ? issueSession(ADMIN_SUBJECT, this.secretFor('admin'), now) : null };
   }
 
   async describeCustomer(customerId: string): Promise<{ firstName: string } | null> {
@@ -66,6 +88,11 @@ export class AuthService {
     if (presented && constantTimeEquals(presented, this.adminToken)) return 'ok';
     this.adminFailures.recordFailure(ip);
     return 'invalid';
+  }
+
+  /** Separate keys per kind, so a customer cookie can never pass as an admin one. */
+  private secretFor(kind: SessionKind): string {
+    return kind === 'admin' ? `${this.sessionSecret}:admin` : this.sessionSecret;
   }
 
   /** One query whichever part is wrong, so timing doesn't reveal which. */

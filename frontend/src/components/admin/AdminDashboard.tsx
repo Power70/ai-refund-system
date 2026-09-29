@@ -1,7 +1,5 @@
 import {
   IconAlertTriangle,
-  IconChevronLeft,
-  IconChevronRight,
   IconCircleCheck,
   IconCircleX,
   IconClockHour4,
@@ -11,7 +9,7 @@ import {
   IconSearch,
   type Icon,
 } from '@tabler/icons-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { adminApi, ApiError, type AdminMetrics, type AiStatus, type QueueRow, type QueueView, type RequestStatus } from '../../api/client'
 import { usePolledData } from '../../hooks/usePolledData'
 import { formatCode, formatDate, formatMoney, formatTime } from '../../lib/format'
@@ -20,11 +18,11 @@ import { Button, focusRing, inputClass, pillClass, StatusDot } from '../ui'
 import { CaseBriefSheet } from './CaseBriefSheet'
 
 const REFRESH_MS = 10_000
-const PAGE_SIZE = 20
+const PAGE_SIZE = 10
 const STATUSES: RequestStatus[] = ['APPROVED', 'DENIED', 'ESCALATED', 'PROCESSING']
 
-export function AdminDashboard({ token, onSignedOut }: { token: string; onSignedOut: () => void }) {
-  const admin = useMemo(() => adminApi(token), [token])
+export function AdminDashboard({ onSignedOut }: { onSignedOut: () => void }) {
+  const admin = adminApi
   const [view, setView] = useState<QueueView>('needs-review')
   const [status, setStatus] = useState<RequestStatus | ''>('')
   const [search, setSearch] = useState('')
@@ -41,10 +39,10 @@ export function AdminDashboard({ token, onSignedOut }: { token: string; onSigned
     return () => window.clearTimeout(timer)
   }, [search])
 
-  const metrics = usePolledData(() => admin.metrics(), token, REFRESH_MS)
+  const metrics = usePolledData(() => admin.metrics(), 'metrics', REFRESH_MS)
   const queue = usePolledData(
     () => admin.queue({ view, status: view === 'all' && status ? status : undefined, q: q || undefined, page, pageSize: PAGE_SIZE }),
-    `${token}|${view}|${status}|${q}|${page}`,
+    `${view}|${status}|${q}|${page}`,
     REFRESH_MS,
   )
 
@@ -54,8 +52,8 @@ export function AdminDashboard({ token, onSignedOut }: { token: string; onSigned
   }, [unauthorized, onSignedOut])
 
   const rows = queue.data?.items ?? []
-  const total = queue.data?.total ?? 0
-  const first = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
+  const pages = Math.max(1, Math.ceil((queue.data?.total ?? 0) / PAGE_SIZE))
+  const signOut = () => void adminApi.signOut().finally(onSignedOut)
 
   const switchView = (next: QueueView) => {
     setView(next)
@@ -72,13 +70,13 @@ export function AdminDashboard({ token, onSignedOut }: { token: string; onSigned
         <div className="flex items-center gap-1 text-xs text-slate-500 sm:gap-2">
           {metrics.data && <span className="hidden sm:inline">Updated {formatTime(metrics.data.generatedAt)}</span>}
           <Button variant="icon" icon={IconRefresh} aria-label="Refresh now" onClick={() => (metrics.reload(), queue.reload())} />
-          <Button variant="ghost" icon={IconLogout} onClick={onSignedOut} aria-label="Sign out" title="Sign out">
+          <Button variant="ghost" icon={IconLogout} onClick={signOut} aria-label="Sign out" title="Sign out">
             <span className="hidden sm:inline">Sign out</span>
           </Button>
         </div>
       </div>
 
-      {metrics.data ? <MetricsTiles metrics={metrics.data} /> : <p className="text-sm text-slate-500">Loading metrics…</p>}
+      {metrics.data ? <MetricsTiles metrics={metrics.data} /> : <div className="h-20" aria-hidden="true" />}
 
       <section aria-label="Refund requests" className="rounded-2xl border border-slate-200 bg-white">
         <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 p-3">
@@ -120,25 +118,38 @@ export function AdminDashboard({ token, onSignedOut }: { token: string; onSigned
           </label>
         </div>
 
-        {queue.error && !unauthorized ? (
-          <p role="alert" className="flex items-center gap-2 px-4 py-6 text-sm text-rose-700">
-            <IconAlertTriangle size={18} aria-hidden="true" /> Couldn't load requests. Retrying automatically.
-          </p>
-        ) : rows.length === 0 ? (
-          <p className="px-4 py-10 text-center text-sm text-slate-500">{queue.data ? (view === 'needs-review' ? 'Nothing is waiting for review.' : 'No requests match.') : 'Loading…'}</p>
-        ) : (
-          <QueueList rows={rows} onOpen={setOpenId} />
-        )}
-
-        <div className="flex items-center justify-between border-t border-slate-100 px-4 py-2 text-sm text-slate-600">
-          <span>
-            {first}–{Math.min(page * PAGE_SIZE, total)} of {total}
-          </span>
-          <div className="flex gap-1">
-            <Button variant="icon" icon={IconChevronLeft} aria-label="Previous page" disabled={page === 1} onClick={() => setPage((p) => p - 1)} />
-            <Button variant="icon" icon={IconChevronRight} aria-label="Next page" disabled={page * PAGE_SIZE >= total} onClick={() => setPage((p) => p + 1)} />
-          </div>
+        {/* Keeps its height while a new view loads; the previous rows stay, dimmed, until the new ones arrive. */}
+        <div aria-busy={queue.loading} className="min-h-48">
+          {queue.error && !queue.data && !unauthorized ? (
+            <p role="alert" className="flex items-center gap-2 px-4 py-6 text-sm text-rose-700">
+              <IconAlertTriangle size={18} aria-hidden="true" /> Couldn't load requests. Retrying automatically.
+            </p>
+          ) : !queue.data ? (
+            <QueueSkeleton />
+          ) : (
+            <div key={`${view}|${status}|${q}|${page}`} className={`transition-opacity duration-200 ${queue.loading ? 'opacity-50' : 'animate-fade-in motion-reduce:animate-none'}`}>
+              {rows.length === 0 ? (
+                <p className="px-4 py-12 text-center text-sm text-slate-500">{view === 'needs-review' ? 'Nothing is waiting for review.' : 'No requests match.'}</p>
+              ) : (
+                <QueueList rows={rows} onOpen={setOpenId} />
+              )}
+            </div>
+          )}
         </div>
+
+        <nav aria-label="Pages" className="flex items-center justify-between gap-2 border-t border-slate-100 px-4 py-2 text-sm text-slate-600">
+          <span aria-live="polite">
+            {Math.min(page, pages)} of {pages}
+          </span>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" disabled={page === 1} onClick={() => setPage((p) => p - 1)} className="disabled:opacity-40">
+              Previous
+            </Button>
+            <Button variant="ghost" disabled={page >= pages} onClick={() => setPage((p) => p + 1)} className="disabled:opacity-40">
+              Next
+            </Button>
+          </div>
+        </nav>
       </section>
 
       {openId && (
@@ -161,24 +172,18 @@ function MetricsTiles({ metrics }: { metrics: AdminMetrics }) {
   return (
     <section aria-label="Metrics" className="space-y-3">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-        <Tile className="col-span-2 sm:col-span-1" icon={IconInbox} label="Requests" value={requests.total} detail={`${requests.last24Hours} in last 24h`} />
+        <Tile className="col-span-2 sm:col-span-1" icon={IconInbox} label="Requests" value={requests.total} />
         <Tile icon={IconCircleCheck} label="Auto-approved" value={requests.approved} tone="text-emerald-700" />
         <Tile icon={IconCircleX} label="Denied" value={requests.denied} tone="text-rose-700" />
-        <Tile icon={IconClockHour4} label="Awaiting review" value={requests.awaitingReview} detail={`${requests.escalated} escalated in total`} tone="text-amber-700" />
-        <Tile
-          icon={IconAlertTriangle}
-          label="Stuck requests"
-          value={metrics.stuckProcessingCount}
-          detail="Expected 0"
-          tone={metrics.stuckProcessingCount > 0 ? 'text-rose-700' : 'text-slate-700'}
-        />
+        <Tile icon={IconClockHour4} label="Awaiting review" value={requests.awaitingReview} tone="text-amber-700" />
+        <Tile icon={IconAlertTriangle} label="Stuck requests" value={metrics.stuckProcessingCount} tone={metrics.stuckProcessingCount > 0 ? 'text-rose-700' : 'text-slate-700'} />
       </div>
       {metrics.topEscalationReasons.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="text-slate-500">Top escalation reasons:</span>
           {metrics.topEscalationReasons.map((r) => (
             <span key={r.reason} className={`${pillClass} border-slate-200 bg-white py-0.5`}>
-              {formatCode(r.reason)} <span className="text-slate-500">{r.count}</span>
+              {formatCode(r.reason)}
             </span>
           ))}
         </div>
@@ -187,15 +192,29 @@ function MetricsTiles({ metrics }: { metrics: AdminMetrics }) {
   )
 }
 
-function Tile({ icon: TileIcon, label, value, detail, tone = 'text-slate-900', className = '' }: { icon: Icon; label: string; value: string | number; detail?: string; tone?: string; className?: string }) {
+function Tile({ icon: TileIcon, label, value, tone = 'text-slate-900', className = '' }: { icon: Icon; label: string; value: number; tone?: string; className?: string }) {
   return (
     <div className={`rounded-2xl border border-slate-200 bg-white p-3 ${className}`}>
       <p className="flex items-center gap-1.5 text-xs text-slate-500">
         <TileIcon size={14} aria-hidden="true" /> {label}
       </p>
-      <p className={`mt-1 text-xl font-semibold ${tone}`}>{value}</p>
-      {detail && <p className="truncate text-xs text-slate-500">{detail}</p>}
+      <p className={`mt-1 text-xl font-semibold tabular-nums ${tone}`}>{value}</p>
     </div>
+  )
+}
+
+/** Placeholder rows shown before the first load, shaped like the real ones. */
+function QueueSkeleton() {
+  return (
+    <ul aria-label="Loading requests" className="divide-y divide-slate-100">
+      {[0, 1, 2].map((i) => (
+        <li key={i} className="flex animate-pulse items-center gap-4 px-4 py-4 motion-reduce:animate-none">
+          <span className="h-3 w-32 rounded bg-slate-200" />
+          <span className="h-3 flex-1 rounded bg-slate-100" />
+          <span className="hidden h-5 w-20 rounded-full bg-slate-100 md:block" />
+        </li>
+      ))}
+    </ul>
   )
 }
 

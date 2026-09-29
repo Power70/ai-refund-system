@@ -72,11 +72,11 @@ describe('customer conversations (e2e)', () => {
       });
     });
 
-    it('starts in AI mode with a greeting', () => {
+    it('starts in AI mode with no opening message (the app greets the customer)', () => {
       expect(grace.started).toMatchObject({ state: 'ACTIVE', mode: 'AI', proposal: null, quickReplies: [] });
       expect(grace.started.reasons).toContainEqual({ reason: 'DAMAGED', label: 'It arrived damaged or defective' });
       expect(grace.started.reasons).toHaveLength(5);
-      expect(grace.started.messages).toEqual([expect.objectContaining({ role: 'ASSISTANT', text: expect.stringMatching(/^Hi Grace,/) })]);
+      expect(grace.started.messages).toEqual([]);
     });
 
     it('turns a typed description into a proposal built from database values', async () => {
@@ -87,8 +87,8 @@ describe('customer conversations (e2e)', () => {
         reason: 'DAMAGED',
         lines: [{ orderItemId: grace.itemId('Linen shirt, blue'), itemName: 'Linen shirt, blue', quantity: 1, maxQuantity: 1 }],
       });
-      expect(body.messages.map((m: { role: string }) => m.role)).toEqual(['ASSISTANT', 'CUSTOMER', 'ASSISTANT']);
-      expect(body.messages[2].text).toBe('Got it. Please check the details below.');
+      expect(body.messages.map((m: { role: string }) => m.role)).toEqual(['CUSTOMER', 'ASSISTANT']);
+      expect(body.messages[1].text).toBe('Got it. Please check the details below.');
       expect(JSON.stringify(body)).not.toMatch(/evidence|confidence|flags|summary/);
     });
 
@@ -112,12 +112,19 @@ describe('customer conversations (e2e)', () => {
       expect(seen.user).toMatch(/<today>\d{4}-\d{2}-\d{2}<\/today>/);
       expect(seen.user).toMatch(/order WN-H9F3LX, placed \d{4}-\d{2}-\d{2}, delivered \d{4}-\d{2}-\d{2} \(\d+ days ago\)/);
       expect(seen.user).toMatch(/"Electric kettle, 1 L": bought 1; can be claimed now: 0; 1 already refunded/);
-      expect(seen.user).toMatch(/rr_15bkett00001 on \d{4}-\d{2}-\d{2}, order WN-H9F3LX: 1 x "Electric kettle, 1 L" \(refunded\)/);
+      expect(seen.user).toMatch(/rr_15bkett00001 on \d{4}-\d{2}-\d{2}, order WN-H9F3LX: refunded\. Items: 1 x "Electric kettle, 1 L" \(refunded\)\. Reason given: Damaged, incorrect or not-as-described items within 30 days qualify for a refund\./);
       expect(seen.user).toContain('- Refunds are available within 30 days of delivery.');
       expect(seen.user).toContain('answered within 2 business days');
       // Review and request-level rules stay internal, and nothing about other customers leaks.
       expect(seen.user).not.toMatch(/\$|500|team member will review|previous request/);
       expect(seen.user).not.toMatch(/@example\.com|[0-9a-f]{8}-[0-9a-f]{4}-/);
+
+      // A reviewer's decision: its outcome, never the internal note.
+      const hassan = await chat('hassan.bello@example.com', 'WN-Z2T5HM');
+      fake.next((req: ToolCallRequest) => ((seen = req), turn()));
+      await hassan.send({ text: 'Why was my headphones request refused?' }).expect(200);
+      expect(seen.user).toMatch(/rr_8hssn0hdph01 on \d{4}-\d{2}-\d{2}, order WN-Z2T5HM: not refunded\. Items: 1 x "Over-ear headphones" \(not refunded\)\. Decided by our support team after a closer look\./);
+      expect(seen.user).not.toContain('too quiet');
     });
 
     it('records the call without the prompt', async () => {
@@ -129,12 +136,12 @@ describe('customer conversations (e2e)', () => {
       const before = fake.requests.length;
       const { body } = await grace.send({ text: 'The blue linen shirt arrived with a TORN seam' }, messageId).expect(200);
       expect(fake.requests.length).toBe(before);
-      expect(body.messages).toHaveLength(3);
+      expect(body.messages).toHaveLength(2);
     });
 
     it('restores the chat after a refresh', async () => {
       const { body } = await grace.view().expect(200);
-      expect(body.messages).toHaveLength(3);
+      expect(body.messages).toHaveLength(2);
       expect(body.proposal.orderNumber).toBe('WN-4GK1VS');
     });
   });

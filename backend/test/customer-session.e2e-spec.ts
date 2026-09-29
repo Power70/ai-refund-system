@@ -32,7 +32,8 @@ describe('customer sign-in (e2e)', () => {
     expect(cookie).toMatch(/HttpOnly/);
     expect(cookie).toMatch(/SameSite=Strict/);
     expect(cookie).toMatch(/Path=\/api/);
-    expect(cookie).toMatch(/Max-Age=1800/);
+    // The cookie lives as long as the session: until the idle window ends.
+    expect(Date.parse(/Expires=([^;]+)/.exec(cookie)![1])).toBe(Math.floor(Date.parse(res.body.expiresAt) / 1000) * 1000);
     expect(cookie).not.toMatch(/Secure/); // plain-HTTP demo
     expect(JSON.stringify(res.body)).not.toContain('@');
   });

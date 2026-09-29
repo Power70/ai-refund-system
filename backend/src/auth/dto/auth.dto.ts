@@ -28,3 +28,15 @@ export class CurrentCustomerDto {
   @ApiProperty({ example: 'Ada' })
   firstName: string;
 }
+
+export class StartAdminSessionDto {
+  @ApiProperty({ example: 'admin-demo-token' })
+  @IsString()
+  @Length(12, 200)
+  token: string;
+}
+
+export class AdminSessionResponseDto {
+  @ApiProperty({ example: '2026-09-27T12:30:00.000Z', description: 'When the session ends if unused; it extends while in use' })
+  expiresAt: string;
+}

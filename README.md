@@ -64,7 +64,7 @@ Every variable is optional; `.env.example` documents them all. Compose reads a `
 | `AI_TIMEOUT_MS` | `20000` | Time budget for one AI call, including its retry and repair attempt |
 | `AI_MIN_CONFIDENCE` | `0.95` | Minimum model confidence for an automatic approval |
 | `ADMIN_TOKEN` | `admin-demo-token` | Dashboard bearer token (12+ characters); the API logs a warning while the demo token is in use |
-| `SESSION_SECRET` | random per start | Signs customer session cookies (32+ characters); without it, sessions end when the API restarts |
+| `SESSION_SECRET` | public demo value | Signs customer and dashboard session cookies (32+ characters); the API logs a warning while the demo value is in use |
 | `WEB_PORT` | `8080` | Port the app is published on |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `refund` / `refund_demo_password` / `refund_support` | Database credentials (the database is not published to the host) |
 
@@ -106,7 +106,7 @@ Approvals need the AI: an approval stands only when the AI's reading of the conv
 
 A timed walkthrough of these scenarios is in [`docs/demo-video-script.md`](docs/demo-video-script.md).
 
-After a decision, the chat keeps going: ask "why?" or "when will I get my money?" and it answers from the stored decision. The support dashboard shows every case with its transcript, the rules that fired, the AI's suggestion and an audit timeline; escalations are resolved item by item with a required note. A dot next to the dashboard title shows whether the AI is online, degraded or off.
+After a decision, the chat keeps going: ask "why?" or "when will I get my money?" and it answers from the stored decision. The support dashboard shows every case with its transcript, the rules that fired, the AI's suggestion and an audit timeline; escalations are resolved item by item with a required note. A dot next to the dashboard title shows whether the AI is online, degraded or off. The queue shows 10 cases per page, with Previous and Next. Customers and reviewers use separate addresses with no link between them, both stay signed in across reloads, and a small "Trying to reconnect…" notice appears only while the service can't be reached.
 
 Customers can open any order under **Your orders** to see its items, totals, what can still be claimed and the refund requests made for it. Each request under **My requests** opens with its latest outcome, including a reviewer's decision made after the page loaded. A request where only some items were refunded, by the policy or a reviewer, shows as **Partly approved** rather than *Approved*; the stored decision keeps the policy's status. The layout is mobile first: on a phone the workspace switches between **Chat**, **Orders** and **Requests** tabs, and the review queue shows each case as a card.
 
@@ -216,9 +216,9 @@ Each request records the policy version in force when it was submitted; retries 
 
 ## Security
 
-- **Customer sessions:** sign in with an email and one of its order numbers. The session is an HMAC-signed, `HttpOnly`, `SameSite=Strict` cookie scoped to `/api`, valid for 30 minutes. Wrong details always get the same 404; after 5 failures an email is locked for 15 minutes.
+- **Customer sessions:** sign in with an email and one of its order numbers. The session is an HMAC-signed, `HttpOnly`, `SameSite=Strict` cookie scoped to `/api`. It slides: it ends after 30 minutes without use and 12 hours after sign-in at the latest, so a page reload keeps the customer signed in. Wrong details always get the same 404; after 5 failures an email is locked for 15 minutes.
 - **Ownership:** every customer resource (orders, conversations, requests) is looked up by owner; another customer's resource is a plain 404. Customer responses contain no rule IDs, traces, flags or AI data.
-- **Admin:** bearer token compared in constant time; 10 wrong tokens lock the IP for 15 minutes. The dashboard keeps the token in memory only.
+- **Admin:** the token is compared in constant time; 10 wrong tokens lock the IP for 15 minutes. The dashboard exchanges it once for its own `HttpOnly` session cookie (a separate signing key, scoped to `/api/v1/admin`, same sliding lifetime), so page scripts never hold the token and a reload keeps the reviewer signed in. API clients can still send `Authorization: Bearer <token>`.
 - **CSRF:** every state-changing request needs `X-Requested-With: refund-app`, which a cross-site form cannot send; the API allows no cross-origin requests.
 - **Rate limits:** 120 requests/min per client, 10 sign-ins/min per IP, 20 chat messages/min and 5 submissions/min per customer; 10 conversations per customer per day, 12 AI turns per conversation and 10 follow-up questions per request bound AI cost.
 - **Input:** strict DTO validation (unknown fields rejected), 32 KB body limit, control characters stripped, database constraints behind the application checks (valid amounts, lease state, required reviewer note, append-only audit log enforced by triggers).
@@ -290,6 +290,7 @@ Stack: NestJS 12, TypeScript, Drizzle ORM, PostgreSQL 16, zod, Vitest; React 19,
 - **Business calls encoded in the policy:** refunds over $500 on an order (cumulative, so splitting doesn't help), a fifth request within 30 days, a final-sale item claimed as damaged and an item denied before all go to a person.
 - **Damage is taken at the customer's word** for automatic approvals within the rules. Photo evidence is out of scope, so a persistent false claimant is caught by the frequency and history rules rather than by evidence.
 - **In-process processing.** A submission waits up to 3 seconds for its decision, then answers `202` while the decision finishes in the background under its lease; the sweeper recovers anything a crash leaves behind. The page polls for the result (every 1.5 s, for about a minute) rather than holding a live connection. This is enough for one API instance and needs no queue infrastructure; see future work for scaling.
+- **A deliberately small frontend.** The original plan named shadcn/ui, TanStack Query, React Router and generated OpenAPI types. The app has two screens behind one hash route and a handful of API calls, so it uses plain React state, one small polling hook (`usePolledData`), its own Tailwind components and hand-written API types in `frontend/src/api/client.ts`. That keeps the bundle and the dependency list small, at a cost: the types mirror the backend DTOs by hand, so a contract change must be made in both places. The backend's end-to-end tests assert the response shapes and the frontend tests type-check their mocked responses against the same types, which catches most drift; generating the types from the OpenAPI document behind `/docs` is the next step if the API grows.
 - **Out of scope:** real payments (no payment call exists anywhere), photo uploads, live human chat, multi-account fraud detection, a policy editing UI, SSO/RBAC.
 - **Retention:** transcripts contain personal data. The assumed retention is 90 days, applied by a scheduled job in production; it is not implemented here.
 
@@ -299,4 +300,5 @@ Stack: NestJS 12, TypeScript, Drizzle ORM, PostgreSQL 16, zod, Vitest; React 19,
 - Real authentication for customers and reviewers, with roles and per-reviewer audit.
 - Photo evidence in chat, and an evaluation set of labelled conversations to measure proposal accuracy and tune the confidence threshold per model.
 - Live status updates (Server-Sent Events) instead of polling.
+- Frontend API types generated from the OpenAPI document instead of maintained by hand.
 - Transcript retention job and data export/delete requests.

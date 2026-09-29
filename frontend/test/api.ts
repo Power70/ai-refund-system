@@ -24,7 +24,7 @@ export function conversation(overrides: Partial<Conversation> = {}): Conversatio
     state: 'ACTIVE',
     mode: 'AI',
     requestId: null,
-    messages: [{ id: 'm1', role: 'ASSISTANT', text: 'Hi Ada, I can help with a refund.', createdAt: '2026-09-28T10:00:00Z' }],
+    messages: [],
     quickReplies: [],
     proposal: null,
     reasons: [

@@ -70,4 +70,28 @@ describe('AuthService', () => {
       expect(service.checkAdmin(`Bearer ${ADMIN}`, '10.0.0.3')).toBe('ok');
     });
   });
+
+  describe('admin sessions', () => {
+    it('exchanges the admin token for a session that only passes as an admin one', () => {
+      const { service } = setup();
+      const { result, session } = service.startAdminSession(ADMIN, '10.0.0.4', now);
+      expect(result).toBe('ok');
+      expect(service.session('admin', session!.token, now)).toEqual({ sub: 'admin', renewed: null });
+      expect(service.session('customer', session!.token, now)).toBeNull();
+    });
+
+    it('never accepts a customer session as an admin one', async () => {
+      const { service } = setup();
+      const { token } = await service.signIn('ada@example.com', 'WN-7K3P9Q', now);
+      expect(service.session('customer', token, now)?.sub).toBe('customer-1');
+      expect(service.session('admin', token, now)).toBeNull();
+    });
+
+    it('refuses a wrong token and counts it towards the IP lock', () => {
+      const { service } = setup();
+      expect(service.startAdminSession('wrong-token-123', '10.0.0.5', now)).toEqual({ result: 'invalid', session: null });
+      for (let i = 0; i < 9; i++) service.startAdminSession('wrong-token-123', '10.0.0.5', now);
+      expect(service.startAdminSession(ADMIN, '10.0.0.5', now)).toEqual({ result: 'locked', session: null });
+    });
+  });
 });

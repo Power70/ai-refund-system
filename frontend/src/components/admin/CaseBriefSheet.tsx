@@ -4,7 +4,7 @@ import { ApiError, type AdminApi, type CaseBrief } from '../../api/client'
 import { errorMessage } from '../../hooks/useSupportChat'
 import { formatCode, formatDate, formatMoney, formatTime } from '../../lib/format'
 import { StatusBadge } from '../StatusBadge'
-import { Alert, Button, inputClass, pillClass, Sheet, Spinner } from '../ui'
+import { Alert, Button, inputClass, pillClass, Sheet } from '../ui'
 
 interface CaseBriefSheetProps {
   api: AdminApi
@@ -46,13 +46,9 @@ export function CaseBriefSheet({ api, requestId, onClose, onResolved }: CaseBrie
       }
     >
           {error && <Alert>{error}</Alert>}
-          {!brief && !error && (
-            <p className="flex items-center gap-2 text-sm text-slate-500">
-              <Spinner /> Loading case…
-            </p>
-          )}
+          {!brief && !error && <BriefSkeleton />}
           {brief && (
-            <>
+            <div className="animate-fade-in space-y-4 motion-reduce:animate-none">
               <Overview brief={brief} />
               <AiSuggestion brief={brief} />
               <ClaimComparison brief={brief} />
@@ -83,7 +79,7 @@ export function CaseBriefSheet({ api, requestId, onClose, onResolved }: CaseBrie
               )}
               <Transcript brief={brief} />
               <TechnicalDetails brief={brief} />
-            </>
+            </div>
           )}
     </Sheet>
   )
@@ -374,5 +370,22 @@ function TechnicalDetails({ brief }: { brief: CaseBrief }) {
         </ol>
       </details>
     </Section>
+  )
+}
+
+/** Placeholder sections shaped like the case, so the sheet doesn't jump when it loads. */
+function BriefSkeleton() {
+  return (
+    <div aria-label="Loading case" className="animate-pulse space-y-4 motion-reduce:animate-none">
+      {['h-24', 'h-32', 'h-20'].map((height) => (
+        <div key={height} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="h-3 w-32 rounded bg-slate-200" />
+          <div className={`space-y-2 ${height}`}>
+            <div className="h-3 w-full rounded bg-slate-100" />
+            <div className="h-3 w-4/5 rounded bg-slate-100" />
+          </div>
+        </div>
+      ))}
+    </div>
   )
 }

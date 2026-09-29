@@ -261,20 +261,24 @@ export interface CaseBrief {
   audit: { type: string; actor: string; data: unknown; correlationId: string | null; at: string }[]
 }
 
-export function adminApi(token: string) {
-  const auth = { Authorization: `Bearer ${token}` }
-  return {
-    metrics: () => request<AdminMetrics>('GET', '/admin/metrics', { headers: auth }),
-    queue: (query: QueueQuery) => {
-      const params = new URLSearchParams({ view: query.view, page: String(query.page), pageSize: String(query.pageSize) })
-      if (query.status) params.set('status', query.status)
-      if (query.q) params.set('q', query.q)
-      return request<{ items: QueueRow[]; total: number; page: number; pageSize: number }>('GET', `/admin/refund-requests?${params}`, { headers: auth })
-    },
-    caseBrief: (requestId: string) => request<CaseBrief>('GET', `/admin/refund-requests/${requestId}`, { headers: auth }),
-    resolve: (requestId: string, lineDecisions: { lineId: string; approve: boolean }[], reviewerNote: string) =>
-      request<CaseBrief>('POST', `/admin/refund-requests/${requestId}/resolution`, { headers: auth, body: { lineDecisions, reviewerNote } }),
-  }
+/** Dashboard API. Authenticated by the httpOnly admin session cookie, which page scripts can't read. */
+export const adminApi = {
+  /** Exchanges the admin token for the session cookie. */
+  signIn: (token: string) => request<{ expiresAt: string }>('POST', '/admin/session', { body: { token } }),
+  /** Resolves when a session exists (used to restore it after a reload). */
+  currentSession: () => request<void>('GET', '/admin/session'),
+  signOut: () => request<void>('DELETE', '/admin/session'),
+
+  metrics: () => request<AdminMetrics>('GET', '/admin/metrics'),
+  queue: (query: QueueQuery) => {
+    const params = new URLSearchParams({ view: query.view, page: String(query.page), pageSize: String(query.pageSize) })
+    if (query.status) params.set('status', query.status)
+    if (query.q) params.set('q', query.q)
+    return request<{ items: QueueRow[]; total: number; page: number; pageSize: number }>('GET', `/admin/refund-requests?${params}`)
+  },
+  caseBrief: (requestId: string) => request<CaseBrief>('GET', `/admin/refund-requests/${requestId}`),
+  resolve: (requestId: string, lineDecisions: { lineId: string; approve: boolean }[], reviewerNote: string) =>
+    request<CaseBrief>('POST', `/admin/refund-requests/${requestId}/resolution`, { body: { lineDecisions, reviewerNote } }),
 }
 
-export type AdminApi = ReturnType<typeof adminApi>
+export type AdminApi = typeof adminApi

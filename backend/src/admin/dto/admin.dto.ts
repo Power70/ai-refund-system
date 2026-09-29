@@ -33,13 +33,13 @@ export class AdminQueueQueryDto {
   @Max(10_000)
   page = 1;
 
-  @ApiPropertyOptional({ default: 20, minimum: 1, maximum: 100 })
+  @ApiPropertyOptional({ default: 10, minimum: 1, maximum: 100 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(100)
-  pageSize = 20;
+  pageSize = 10;
 }
 
 export class AdminQueueRowDto {

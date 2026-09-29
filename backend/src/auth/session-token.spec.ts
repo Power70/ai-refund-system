@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { constantTimeEquals, signSessionToken, unverifiedSessionSubject, verifySessionToken } from './session-token.js';
+import { constantTimeEquals, renewSession, SESSION_MAX_SECONDS, signSessionToken, unverifiedSessionSubject, verifySessionToken } from './session-token.js';
 
 const secret = 's'.repeat(32);
 const now = new Date('2026-09-27T12:00:00Z');
@@ -60,5 +60,26 @@ describe('constantTimeEquals', () => {
     expect(constantTimeEquals('admin-demo-token', 'admin-demo-tokeN')).toBe(false);
     expect(constantTimeEquals('admin-demo-token', 'admin-demo-token ')).toBe(false);
     expect(constantTimeEquals('', 'x')).toBe(false);
+  });
+
+  describe('renewSession (sliding expiry)', () => {
+    const at = (secondsFromIat: number) => new Date((nowSec + secondsFromIat) * 1000);
+
+    it('is not due while more than half of the idle window is left', () => {
+      expect(renewSession(payload, secret, at(10 * 60))).toBeNull();
+    });
+
+    it('restarts the idle window once less than half is left, keeping the sign-in time', () => {
+      const renewed = renewSession(payload, secret, at(20 * 60))!;
+      expect(renewed.expiresAt).toEqual(at(20 * 60 + 1800));
+      expect(verifySessionToken(renewed.token, secret, at(20 * 60))).toEqual({ ...payload, exp: nowSec + 20 * 60 + 1800 });
+    });
+
+    it('never extends past the absolute lifetime', () => {
+      const atCap = { ...payload, exp: nowSec + SESSION_MAX_SECONDS };
+      expect(renewSession(atCap, secret, at(SESSION_MAX_SECONDS - 120))).toBeNull();
+      const nearCap = { ...payload, exp: nowSec + SESSION_MAX_SECONDS - 600 };
+      expect(renewSession(nearCap, secret, at(SESSION_MAX_SECONDS - 1000))!.expiresAt).toEqual(at(SESSION_MAX_SECONDS));
+    });
   });
 });
