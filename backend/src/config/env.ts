@@ -12,6 +12,8 @@ export const envSchema = z.object({
   POLICY_FILE: z.string().min(1).default('../policy/refund-policy.yaml'),
   // Stuck-request sweep interval in ms; 0 disables the sweeper.
   SWEEPER_INTERVAL_MS: z.coerce.number().int().min(0).default(30_000),
+  // How long a submission waits for its decision before answering 202 (still processing).
+  SUBMIT_WAIT_MS: z.coerce.number().int().min(0).max(30_000).default(3_000),
   // Minimum AI confidence for an automatic approval. Can only add escalations.
   AI_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.95),
   // Admin API bearer token. Falls back to the documented demo token with a startup warning.

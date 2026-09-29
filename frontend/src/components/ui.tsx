@@ -1,4 +1,4 @@
-import { IconLoader2, IconX, type Icon } from '@tabler/icons-react'
+import { IconAlertTriangle, IconLoader2, IconRefresh, IconX, type Icon } from '@tabler/icons-react'
 import { useEffect, useRef, type ComponentProps, type FormEvent, type ReactNode } from 'react'
 
 export const focusRing = 'focus-visible:ring-2 focus-visible:ring-indigo-300 focus-visible:outline-none'
@@ -45,6 +45,20 @@ export function Panel({ id, icon: PanelIcon, title, children }: { id: string; ic
 
 export function PanelMessage({ children }: { children: ReactNode }) {
   return <p className="px-4 py-6 text-sm text-slate-500">{children}</p>
+}
+
+/** A load failure with a way to try again. */
+export function LoadError({ children, onRetry }: { children: ReactNode; onRetry: () => void }) {
+  return (
+    <div role="alert" className="flex flex-wrap items-center justify-between gap-2 px-4 py-4 text-sm text-rose-700">
+      <span className="flex items-center gap-2">
+        <IconAlertTriangle size={18} aria-hidden="true" /> {children}
+      </span>
+      <Button variant="ghost" icon={IconRefresh} onClick={onRetry}>
+        Try again
+      </Button>
+    </div>
+  )
 }
 
 /** A card shown inside the chat thread. Takes focus (without scrolling) when shown or when `focusKey` changes. */

@@ -176,13 +176,19 @@ export class FakeLlm implements LlmAdapter {
   decisionMessage: string | null = null;
   followUpAnswer: { answer: string; isDispute: boolean } | null = null;
 
+  /** Delay before answering decision-message calls, to simulate a slow provider. */
+  decisionMessageDelayMs = 0;
+
   /** Returned for case-summary calls, which run in the background after submissions. */
   summary: unknown = { summary: 'Customer reports a problem with the item.', suggestedAction: 'NEEDS_INFO', rationale: 'Details need checking.' };
 
   async callTool(request: ToolCallRequest): Promise<ToolCallResult> {
     if (request.toolName === 'report_ready') return { input: { ready: true } };
     if (request.toolName === 'record_case_summary') return { input: this.summary, inputTokens: 200, outputTokens: 40 };
-    if (request.toolName === 'record_decision_message') return { input: { message: this.decisionMessage ?? defaultDecisionMessage(request.user) } };
+    if (request.toolName === 'record_decision_message') {
+      if (this.decisionMessageDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, this.decisionMessageDelayMs));
+      return { input: { message: this.decisionMessage ?? defaultDecisionMessage(request.user) } };
+    }
     if (request.toolName === 'record_answer') return { input: this.followUpAnswer ?? { answer: 'Hi {{customer_first_name}}, happy to help with your request.', isDispute: false } };
     this.requests.push(request);
     const scripted = this.queue.shift();

@@ -1,4 +1,4 @@
-import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
 import { and, desc, eq, gte, inArray, ne, or, sql } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import { canonicalJson } from '../common/canonical-json.js';
@@ -34,6 +34,9 @@ export const refundError = domainErrors<RefundErrorCode>({
   NO_ACTIVE_POLICY: HttpStatus.SERVICE_UNAVAILABLE,
   CONVERSATION_ALREADY_SUBMITTED: HttpStatus.CONFLICT,
 });
+
+/** Injection token: how long a submission waits for its decision before answering 202. */
+export const SUBMIT_WAIT_MS = Symbol('SUBMIT_WAIT_MS');
 
 /** created: a new request (201); replayed: same key and claim seen before (200). */
 export interface SubmissionOutcome {
@@ -73,16 +76,24 @@ const itemNotFound = () => refundError('ORDER_OR_ITEM_NOT_FOUND', "We couldn't f
 
 /** Customer refund requests: exactly-once submission and the customer's view of the outcome. */
 @Injectable()
-export class RefundsService {
+export class RefundsService implements OnApplicationShutdown {
   private readonly logger = new Logger(RefundsService.name);
+  /** Decisions and case notes still running after their response was sent. */
+  private readonly background = new Set<Promise<unknown>>();
 
   constructor(
     @Inject(DATABASE) private readonly db: Database,
+    @Inject(SUBMIT_WAIT_MS) private readonly submitWaitMs: number,
     private readonly orders: OrdersService,
     private readonly policies: PolicyService,
     private readonly decisions: DecisionService,
     private readonly summaries: ReviewSummaryService,
   ) {}
+
+  /** Lets background work finish before the database pool closes. */
+  async onApplicationShutdown(): Promise<void> {
+    await Promise.allSettled(this.background);
+  }
 
   /**
    * Submits a confirmed claim exactly once per idempotency key:
@@ -111,9 +122,7 @@ export class RefundsService {
       throw error;
     }
 
-    await this.decideSafely(reserved.requestId, reserved.leaseOwner);
-    // Runs after the response so reviewer notes never delay the customer.
-    void this.summaries.summarize(reserved.requestId);
+    await this.decideWithin(reserved.requestId, reserved.leaseOwner);
     return { kind: 'created', view: (await this.view(customerId, { requestId: reserved.requestId }))! };
   }
 
@@ -180,7 +189,7 @@ export class RefundsService {
     }
     if (existing.state === 'PROCESSING' && existing.leaseExpiresAt && existing.leaseExpiresAt < new Date()) {
       const leaseOwner = await this.decisions.reclaimExpiredLease(existing.id);
-      if (leaseOwner) await this.decideSafely(existing.id, leaseOwner);
+      if (leaseOwner) await this.decideWithin(existing.id, leaseOwner);
     }
     return { kind: 'replayed', view: (await this.view(customerId, { requestId: existing.id }))! };
   }
@@ -335,6 +344,27 @@ export class RefundsService {
    * A failure leaves the request PROCESSING with its reservation: the customer sees "processing",
    * and a retry or the sweeper finishes it once the lease expires.
    */
+  /**
+   * Decides the request, waiting at most SUBMIT_WAIT_MS: a slow model never holds the response.
+   * On timeout the view is still PROCESSING (202) and the decision finishes in the background;
+   * the case note follows the decision and never delays the customer.
+   */
+  private async decideWithin(requestId: string, leaseOwner: string): Promise<void> {
+    const decided = this.decideSafely(requestId, leaseOwner);
+    this.runInBackground(decided.then(() => this.summaries.summarize(requestId)));
+    let timer: NodeJS.Timeout | undefined;
+    const waited = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, this.submitWaitMs);
+    });
+    await Promise.race([decided, waited]);
+    clearTimeout(timer);
+  }
+
+  private runInBackground(work: Promise<unknown>): void {
+    this.background.add(work);
+    void work.finally(() => this.background.delete(work));
+  }
+
   private async decideSafely(requestId: string, leaseOwner: string): Promise<void> {
     try {
       await this.decisions.decide(requestId, leaseOwner);

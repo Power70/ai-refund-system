@@ -1,20 +1,22 @@
 import { IconChevronRight, IconMessageCircleQuestion, IconPackage, IconTag } from '@tabler/icons-react'
 import type { Order, OrderItem } from '../api/client'
 import { formatDate, formatMoney, itemAvailability } from '../lib/format'
-import { Button, focusRing, Panel, PanelMessage } from './ui'
+import { Button, focusRing, LoadError, Panel, PanelMessage } from './ui'
 
 interface OrdersPanelProps {
   orders: Order[] | null
   /** Null when items can't be discussed right now (e.g. the claim was already submitted). */
   onAskAbout: ((item: OrderItem) => void) | null
   onOpen: (order: Order) => void
+  /** Set when loading failed; shown while there is nothing to display. */
+  onRetry: (() => void) | null
 }
 
-export function OrdersPanel({ orders, onAskAbout, onOpen }: OrdersPanelProps) {
+export function OrdersPanel({ orders, onAskAbout, onOpen, onRetry }: OrdersPanelProps) {
   return (
     <Panel id="orders-heading" icon={IconPackage} title="Your orders">
       {orders === null ? (
-        <PanelMessage>Loading orders…</PanelMessage>
+        onRetry ? <LoadError onRetry={onRetry}>We couldn't load your orders.</LoadError> : <PanelMessage>Loading orders…</PanelMessage>
       ) : (
         <ul className="divide-y divide-slate-100">
           {orders.map((order) => (

@@ -7,7 +7,7 @@ import { PolicyModule } from '../policy/policy.module.js';
 import { CustomerMessagesService } from './customer-messages.service.js';
 import { DecisionService } from './decision.service.js';
 import { RefundsController } from './refunds.controller.js';
-import { RefundsService } from './refunds.service.js';
+import { RefundsService, SUBMIT_WAIT_MS } from './refunds.service.js';
 import { RequestFactsService } from './request-facts.service.js';
 import { ReviewSummaryService } from './review-summary.service.js';
 import { SWEEPER_INTERVAL_MS, SweeperService } from './sweeper.service.js';
@@ -27,6 +27,11 @@ import { SWEEPER_INTERVAL_MS, SweeperService } from './sweeper.service.js';
       provide: SWEEPER_INTERVAL_MS,
       inject: [ConfigService],
       useFactory: (config: ConfigService<Env, true>) => config.get('SWEEPER_INTERVAL_MS', { infer: true }),
+    },
+    {
+      provide: SUBMIT_WAIT_MS,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<Env, true>) => config.get('SUBMIT_WAIT_MS', { infer: true }),
     },
   ],
   exports: [RefundsService, CustomerMessagesService],

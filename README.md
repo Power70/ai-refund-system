@@ -108,7 +108,7 @@ A timed walkthrough of these scenarios is in [`docs/demo-video-script.md`](docs/
 
 After a decision, the chat keeps going: ask "why?" or "when will I get my money?" and it answers from the stored decision. The support dashboard shows every case with its transcript, the rules that fired, the AI's suggestion and an audit timeline; escalations are resolved item by item with a required note. A dot next to the dashboard title shows whether the AI is online, degraded or off.
 
-Customers can open any order under **Your orders** to see its items, totals, what can still be claimed and the refund requests made for it. The layout is mobile first: on a phone the workspace switches between **Chat**, **Orders** and **Requests** tabs, and the review queue shows each case as a card.
+Customers can open any order under **Your orders** to see its items, totals, what can still be claimed and the refund requests made for it. Each request under **My requests** opens with its latest outcome, including a reviewer's decision made after the page loaded. The layout is mobile first: on a phone the workspace switches between **Chat**, **Orders** and **Requests** tabs, and the review queue shows each case as a card.
 
 ## Architecture
 
@@ -233,7 +233,7 @@ Each request records the policy version in force when it was submitted; retries 
 | Duplicate submission (double click, retry, flaky network) | Same `Idempotency-Key` and claim returns the original request; a different claim under the same key is `409` |
 | Two submissions for the same item at once | Row locks serialise them; the second sees the first reservation (`409 ALREADY_IN_PROGRESS`) |
 | Crash between the two transactions | The request stays *Processing* with its reservation; a retry or the sweeper (every 30 s) finishes it; after 3 attempts a person gets it |
-| Decision still running when the response is due | `202` with status *Processing*; the page polls until it is decided |
+| Decision still running after `SUBMIT_WAIT_MS` (default 3 s, e.g. a slow model) | `202` with status *Processing*; the decision finishes in the background and the page polls until it is decided |
 | Database unreachable | Bounded connection waits; the public health check turns unhealthy; requests fail fast |
 | Policy file invalid or conflicting | The API refuses to start and logs the reason; the previous version stays in the database |
 | Two reviewers resolve the same case | The request row is locked; exactly one wins, the other gets `409 ALREADY_RESOLVED` |
@@ -253,6 +253,15 @@ The end-to-end suites boot the real application with a scripted fake model, so n
 ```bash
 docker run --rm -d -p 5432:5432 -e POSTGRES_USER=refund -e POSTGRES_PASSWORD=refund_demo_password postgres:16-alpine
 ```
+
+In `frontend/`:
+
+```bash
+npm test            # components in jsdom against a mocked API (MSW); no server needed
+npm run lint
+```
+
+They cover the behaviour that protects the customer and the reviewer: every retry of a submission repeats the same idempotency key, an edited claim gets a new one, a request still processing is checked until it is decided, each item shows its own outcome, order details open and start a chat, and a case is resolved item by item with a required note (including the conflict when another reviewer got there first). Any request the tests did not mock fails the test.
 
 `scripts/smoke.sh` checks a running stack through the proxy (see [Quick start](#quick-start)).
 
@@ -278,7 +287,7 @@ Stack: NestJS 12, TypeScript, Drizzle ORM, PostgreSQL 16, zod, Vitest; React 19,
 - **Confidence is not calibration.** It only adds escalations; the default threshold is strict and can be tuned with `AI_MIN_CONFIDENCE`.
 - **Business calls encoded in the policy:** refunds over $500 on an order (cumulative, so splitting doesn't help), a fifth request within 30 days, a final-sale item claimed as damaged and an item denied before all go to a person.
 - **Damage is taken at the customer's word** for automatic approvals within the rules. Photo evidence is out of scope, so a persistent false claimant is caught by the frequency and history rules rather than by evidence.
-- **Synchronous processing** with a lease, a `202` fallback and a sweeper is enough for one API instance. It needs no queue infrastructure; see future work for scaling.
+- **In-process processing.** A submission waits up to 3 seconds for its decision, then answers `202` while the decision finishes in the background under its lease; the sweeper recovers anything a crash leaves behind. The page polls for the result (every 1.5 s, for about a minute) rather than holding a live connection. This is enough for one API instance and needs no queue infrastructure; see future work for scaling.
 - **Out of scope:** real payments (no payment call exists anywhere), photo uploads, live human chat, multi-account fraud detection, a policy editing UI, SSO/RBAC.
 - **Retention:** transcripts contain personal data. The assumed retention is 90 days, applied by a scheduled job in production; it is not implemented here.
 

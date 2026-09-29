@@ -7,6 +7,7 @@ import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/common/http.js';
 import { createPgPool, PG_POOL } from '../src/database/database.providers.js';
 import { POLICY_FILE_PATH } from '../src/policy/policy.service.js';
+import { SUBMIT_WAIT_MS } from '../src/refunds/refunds.service.js';
 import { SWEEPER_INTERVAL_MS } from '../src/refunds/sweeper.service.js';
 import { REAL_POLICY_PATH } from './support/policy-fixtures.js';
 
@@ -15,6 +16,8 @@ export interface TestAppOptions {
   policyFilePath?: string;
   /** 0 (default) keeps the background sweeper off; tests call it directly. */
   sweeperIntervalMs?: number;
+  /** How long a submission waits for its decision; defaults to the configured value. */
+  submitWaitMs?: number;
   /** Enables AI with this adapter (e.g. FakeLlm); otherwise AI follows the environment. */
   llm?: LlmAdapter;
 }
@@ -27,6 +30,7 @@ const FAKE_LLM_CONFIG: LlmConfigResult = {
 /** Boots the real AppModule with production HTTP configuration against the given database. */
 export async function createTestApp(databaseUrl: string, options: TestAppOptions = {}): Promise<NestExpressApplication> {
   let builder = Test.createTestingModule({ imports: [AppModule] });
+  if (options.submitWaitMs !== undefined) builder = builder.overrideProvider(SUBMIT_WAIT_MS).useValue(options.submitWaitMs);
   if (options.llm) builder = builder.overrideProvider(LLM_CONFIG).useValue(FAKE_LLM_CONFIG).overrideProvider(LLM_ADAPTER).useValue(options.llm);
   const moduleRef = await builder
     .overrideProvider(PG_POOL)

@@ -8,8 +8,9 @@ import { ClaimCard } from './ClaimCard'
 import { DecisionCard } from './DecisionCard'
 import { OrderDetailsSheet } from './OrderDetailsSheet'
 import { OrdersPanel } from './OrdersPanel'
+import { RequestDetailsSheet } from './RequestDetailsSheet'
 import { RequestHistory } from './RequestHistory'
-import { Button, focusRing } from './ui'
+import { Button, focusRing, LoadError } from './ui'
 
 type Tab = 'chat' | 'orders' | 'requests'
 
@@ -31,6 +32,8 @@ export function SupportWorkspace({ firstName, onSignedOut }: SupportWorkspacePro
   // Phones show one section at a time; from `lg` all are visible side by side.
   const [tab, setTab] = useState<Tab>('chat')
   const [openOrder, setOpenOrder] = useState<string | null>(null)
+  const [openRequest, setOpenRequest] = useState<string | null>(null)
+  const [loadFailed, setLoadFailed] = useState(false)
 
   const [refreshCount, setRefreshCount] = useState(0)
   useEffect(() => {
@@ -40,8 +43,10 @@ export function SupportWorkspace({ firstName, onSignedOut }: SupportWorkspacePro
         if (!current) return
         setOrders(nextOrders)
         setRequests(nextRequests)
+        setLoadFailed(false)
       })
-      .catch(() => undefined)
+      // A failed refresh keeps what is already shown; a failed first load offers a retry.
+      .catch(() => current && setLoadFailed(true))
     return () => {
       current = false
     }
@@ -55,7 +60,7 @@ export function SupportWorkspace({ firstName, onSignedOut }: SupportWorkspacePro
 
   const proposal = aiChat && !manualOpen ? conversation.proposal : null
   const showClaim = active && !chat.request && orders !== null && (conversation.mode === 'MANUAL' || manualOpen || proposal !== null)
-  const currency = orders?.find((o) => o.orderNumber === chat.request?.orderNumber)?.currency
+  const currencyOf = (orderNumber: string | undefined) => orders?.find((o) => o.orderNumber === orderNumber)?.currency
 
   const onQuickReply = (reply: QuickReply) => {
     if (reply.kind === 'ITEM') chat.send({ orderItemId: reply.orderItemId }, reply.label)
@@ -72,6 +77,16 @@ export function SupportWorkspace({ firstName, onSignedOut }: SupportWorkspacePro
         }
       : null
   const detailsOrder = orders?.find((o) => o.orderNumber === openOrder)
+  const detailsRequest = requests?.find((r) => r.requestId === openRequest)
+  const retryLoad = loadFailed ? () => setRefreshCount((n) => n + 1) : null
+  // Shows the listed state at once, then the latest (a reviewer may have decided since the list loaded).
+  const openRequestDetails = (requestId: string) => {
+    setOpenRequest(requestId)
+    api
+      .refundRequest(requestId)
+      .then((latest) => setRequests((list) => list?.map((r) => (r.requestId === latest.requestId ? latest : r)) ?? list))
+      .catch(() => undefined)
+  }
   const inProgress = requests?.filter((r) => r.status === 'PROCESSING' || r.status === 'ESCALATED').length ?? 0
 
   const startNew = () => {
@@ -115,10 +130,10 @@ export function SupportWorkspace({ firstName, onSignedOut }: SupportWorkspacePro
 
       <aside className={`space-y-4 lg:order-1 lg:block lg:overflow-y-auto ${tab === 'chat' ? 'hidden' : ''}`}>
         <div id="section-orders" className={tab === 'orders' ? '' : 'hidden lg:block'}>
-          <OrdersPanel orders={orders} onAskAbout={askAbout} onOpen={(order) => setOpenOrder(order.orderNumber)} />
+          <OrdersPanel orders={orders} onAskAbout={askAbout} onOpen={(order) => setOpenOrder(order.orderNumber)} onRetry={retryLoad} />
         </div>
         <div id="section-requests" className={tab === 'requests' ? '' : 'hidden lg:block'}>
-          <RequestHistory requests={requests} />
+          <RequestHistory requests={requests} onOpen={(request) => openRequestDetails(request.requestId)} onRetry={retryLoad} />
         </div>
       </aside>
 
@@ -165,10 +180,16 @@ export function SupportWorkspace({ firstName, onSignedOut }: SupportWorkspacePro
                 onCancel={manualOpen ? () => setManualOpen(false) : undefined}
               />
             )}
-            {chat.request && <DecisionCard request={chat.request} currency={currency} />}
+            {chat.request && <DecisionCard request={chat.request} currency={currencyOf(chat.request.orderNumber)} />}
           </ChatThread>
         ) : (
           <p className="flex-1 px-4 py-6 text-sm text-slate-500">Starting a conversation…</p>
+        )}
+
+        {retryLoad && orders === null && (
+          <div className="border-t border-rose-200 bg-rose-50">
+            <LoadError onRetry={retryLoad}>We couldn't load your orders.</LoadError>
+          </div>
         )}
 
         {chat.error && !chat.pending?.failed && (
@@ -189,6 +210,7 @@ export function SupportWorkspace({ firstName, onSignedOut }: SupportWorkspacePro
         {composer && <ChatComposer placeholder={composer.placeholder} disabled={busy || chat.submitting} onSend={(text) => chat.send({ text }, text)} />}
       </section>
 
+      {detailsRequest && <RequestDetailsSheet request={detailsRequest} currency={currencyOf(detailsRequest.orderNumber)} onClose={() => setOpenRequest(null)} />}
       {detailsOrder && <OrderDetailsSheet order={detailsOrder} requests={requests} onAskAbout={askAbout} onClose={() => setOpenOrder(null)} />}
     </div>
   )

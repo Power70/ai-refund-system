@@ -27,11 +27,12 @@ class TestRefundsService extends RefundsService {
   view = vi.fn(async () => view as CustomerRequestViewDto | null);
 }
 
-function setup() {
+function setup(submitWaitMs = 3_000) {
   const decisions = { decide: vi.fn(async () => true) };
   const summaries = { summarize: vi.fn(async () => undefined) };
   const service = new TestRefundsService(
     {} as Database,
+    submitWaitMs,
     {} as OrdersService,
     {} as PolicyService,
     decisions as unknown as DecisionService,
@@ -88,6 +89,20 @@ describe('RefundsService.submit', () => {
     const error = new DomainException('QUANTITY_TOO_HIGH', 'Only 1 of this item can be refunded.', 422);
     service.reserve.mockRejectedValue(error);
     await expect(service.submit('cust-1', KEY, dto)).rejects.toBe(error);
+  });
+
+  it('answers while a slow decision is still running, then finishes it and the case note', async () => {
+    const { service, decisions, summaries } = setup(10);
+    let finish!: () => void;
+    decisions.decide.mockReturnValue(new Promise<boolean>((resolve) => (finish = () => resolve(true))));
+
+    await expect(service.submit('cust-1', KEY, dto)).resolves.toEqual({ kind: 'created', view });
+    expect(summaries.summarize).not.toHaveBeenCalled();
+
+    const shutdown = service.onApplicationShutdown();
+    finish();
+    await shutdown;
+    expect(summaries.summarize).toHaveBeenCalledWith('req-1');
   });
 
   it('keeps the request for retry when deciding fails', async () => {

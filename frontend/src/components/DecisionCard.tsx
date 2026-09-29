@@ -22,23 +22,38 @@ export function DecisionCard({ request, currency }: { request: RefundRequestView
         <StatusBadge status={request.status} />
       </div>
 
-      <p className="mt-3 text-sm whitespace-pre-wrap text-slate-800" aria-live="polite">
-        {request.status === 'PROCESSING' ? "We're checking your request. This usually takes a few seconds." : request.customerMessage}
-      </p>
-
-      <RequestLines lines={request.lines} className="mt-3" />
-
-      {request.approvedAmountMinor > 0 && (
-        <p className="mt-3 border-t border-slate-100 pt-3 text-sm">
-          Refund amount: <span className="font-semibold">{formatMoney(request.approvedAmountMinor, currency)}</span>
-        </p>
-      )}
+      <RequestOutcome request={request} currency={currency} live className="mt-3" />
     </ChatCard>
   )
 }
 
+interface RequestOutcomeProps {
+  request: RefundRequestView
+  currency?: string
+  /** Announce message changes (the card in the chat, which updates while processing). */
+  live?: boolean
+  className?: string
+}
+
+/** The customer's message, each item's outcome and the amount refunded. */
+export function RequestOutcome({ request, currency, live = false, className = '' }: RequestOutcomeProps) {
+  return (
+    <div className={`space-y-3 ${className}`}>
+      <p className="text-sm whitespace-pre-wrap text-slate-800" aria-live={live ? 'polite' : undefined}>
+        {request.status === 'PROCESSING' ? "We're checking your request. This usually takes a few seconds." : request.customerMessage}
+      </p>
+      <RequestLines lines={request.lines} />
+      {request.approvedAmountMinor > 0 && (
+        <p className="border-t border-slate-100 pt-3 text-sm">
+          Refund amount: <span className="font-semibold">{formatMoney(request.approvedAmountMinor, currency)}</span>
+        </p>
+      )}
+    </div>
+  )
+}
+
 /** Each claimed item with its outcome. */
-export function RequestLines({ lines, className = '' }: { lines: RefundRequestView['lines']; className?: string }) {
+function RequestLines({ lines, className = '' }: { lines: RefundRequestView['lines']; className?: string }) {
   return (
     <ul className={`space-y-1.5 ${className}`}>
       {lines.map((line) => (

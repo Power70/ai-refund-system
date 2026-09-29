@@ -8,7 +8,7 @@ import * as schema from '../src/database/schema.js';
 import { generatePublicRequestId } from '../src/common/validation.js';
 import { computePayloadHash } from '../src/refunds/refunds.service.js';
 import { createTestApp } from './create-test-app.js';
-import { customerClient, demoOrder, prepareDemoDatabase, CSRF, type TestDatabase } from './support/test-app.js';
+import { customerClient, demoOrder, FakeLlm, prepareDemoDatabase, CSRF, type TestDatabase } from './support/test-app.js';
 
 describe('refund submission (e2e)', () => {
   let testDb: TestDatabase;
@@ -204,6 +204,33 @@ describe('refund submission (e2e)', () => {
     await request(app.getHttpServer()).post('/api/v1/customer/refund-requests').set(CSRF).send({}).expect(401);
     const ifeoma = await customerClient(app, 'ifeoma.nwosu@example.com', 'WN-6PQ8XE');
     await request(app.getHttpServer()).post('/api/v1/customer/refund-requests').set('Cookie', ifeoma.cookie).send({}).expect(403);
+  });
+
+  it('answers 202 when the decision takes longer than the wait, then finishes it in the background', async () => {
+    const llm = new FakeLlm();
+    llm.decisionMessageDelayMs = 400;
+    const slowApp = await createTestApp(testDb.url, { llm, submitWaitMs: 50 });
+    try {
+      const ben = await customerClient(slowApp, 'ben.carter@example.com', 'WN-Q4M1ZT');
+      // A second, distinct claim for Ben: the first test already claimed the lamp.
+      const [lamp] = await db.select().from(schema.orderItems).where(eq(schema.orderItems.name, 'Desk lamp, black'));
+      await db.update(schema.orderItems).set({ quantity: lamp.quantity + 1 }).where(eq(schema.orderItems.id, lamp.id));
+
+      const started = Date.now();
+      const res = await ben.submit({ orderNumber: 'WN-Q4M1ZT', reason: 'DAMAGED', lines: [{ itemId: ben.itemId('Desk lamp, black'), quantity: 1 }] }).expect(202);
+      expect(Date.now() - started).toBeLessThan(400);
+      expect(res.body).toMatchObject({ status: 'PROCESSING', customerMessage: null, lines: [{ outcome: 'PROCESSING' }] });
+
+      await vi.waitFor(
+        async () => {
+          const view = await ben.get(`/${res.body.requestId}`).expect(200);
+          expect(view.body).toMatchObject({ status: 'DENIED', lines: [{ outcome: 'NOT_REFUNDED' }] });
+        },
+        { timeout: 3_000, interval: 100 },
+      );
+    } finally {
+      await slowApp.close();
+    }
   });
 });
 

@@ -1,7 +1,7 @@
 import { IconMessageCircleQuestion, IconTag } from '@tabler/icons-react'
 import type { Order, OrderItem, RefundRequestView } from '../api/client'
 import { formatDate, formatMoney, itemAvailability } from '../lib/format'
-import { RequestLines } from './DecisionCard'
+import { RequestOutcome } from './DecisionCard'
 import { StatusBadge } from './StatusBadge'
 import { Button, Sheet } from './ui'
 
@@ -98,9 +98,7 @@ export function OrderDetailsSheet({ order, requests, onAskAbout, onClose }: Orde
                   </span>
                   <StatusBadge status={r.status} />
                 </div>
-                <RequestLines lines={r.lines} />
-                {r.customerMessage && <p className="text-sm whitespace-pre-wrap text-slate-700">{r.customerMessage}</p>}
-                {r.approvedAmountMinor > 0 && <p className="text-sm font-medium">Refunded {money(r.approvedAmountMinor)}</p>}
+                <RequestOutcome request={r} currency={order.currency} />
               </li>
             ))}
           </ul>
