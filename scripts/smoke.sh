@@ -8,7 +8,7 @@
 # safe: each claim uses a fixed Idempotency-Key, so repeats replay the stored result. Wait a
 # minute between runs, or the per-customer submission limit (5 per minute) answers 429.
 # Needs bash and curl only (on Windows: Git Bash or WSL). Reads ADMIN_PASSWORD, SEED_CUSTOMER_EMAIL
-# and SEED_CUSTOMER_PASSWORD from the environment, or from .env when they are not set.
+# and SEED_CUSTOMER_PASSWORD from the environment or .env, falling back to the compose demo values.
 set -euo pipefail
 
 # Loads only the named keys from .env, without running it as a script.
@@ -22,9 +22,10 @@ from_env_file() {
   done
 }
 from_env_file ADMIN_PASSWORD SEED_CUSTOMER_EMAIL SEED_CUSTOMER_PASSWORD WEB_PORT
-for key in ADMIN_PASSWORD SEED_CUSTOMER_EMAIL SEED_CUSTOMER_PASSWORD; do
-  [ -n "${!key:-}" ] || { echo "Set $key (in .env or the environment)" >&2; exit 1; }
-done
+# Same fallbacks as docker-compose.yml.
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin}"
+SEED_CUSTOMER_EMAIL="${SEED_CUSTOMER_EMAIL:-nwisuanu@gmail.com}"
+SEED_CUSTOMER_PASSWORD="${SEED_CUSTOMER_PASSWORD:-customer}"
 
 BASE_URL="${BASE_URL:-http://localhost:${WEB_PORT:-8080}}"
 API="${BASE_URL}/api/v1"

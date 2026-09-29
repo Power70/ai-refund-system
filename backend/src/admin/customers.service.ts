@@ -6,7 +6,6 @@ import { OrdersService } from '../orders/orders.service.js';
 import { escapeLike } from './admin.service.js';
 import type { AdminCustomerDetailDto, AdminCustomerListDto, AdminCustomersQueryDto } from './dto/admin.dto.js';
 
-/** Read-only customer views for the support dashboard. */
 @Injectable()
 export class AdminCustomersService {
   constructor(
@@ -14,7 +13,6 @@ export class AdminCustomersService {
     private readonly orders: OrdersService,
   ) {}
 
-  /** Customers by name, with counts and totals; searchable by name or email. One query per page plus a count. */
   async list(query: AdminCustomersQueryDto): Promise<AdminCustomerListDto> {
     const where = query.q ? or(ilike(customers.name, `%${escapeLike(query.q)}%`), ilike(customers.email, `%${escapeLike(query.q)}%`)) : undefined;
     const [rows, [{ total }]] = await Promise.all([
@@ -23,7 +21,7 @@ export class AdminCustomersService {
           customerId: customers.id,
           name: customers.name,
           email: customers.email,
-          // Written with explicit aliases: inside these subqueries Drizzle would leave column names unqualified.
+          // Raw SQL with explicit aliases: Drizzle leaves column names unqualified in subqueries.
           orders: sql<number>`(select count(*) from orders o where o.customer_id = customers.id)::int`,
           requests: sql<number>`(select count(*) from refund_requests r where r.customer_id = customers.id)::int`,
           openRequests: sql<number>`(
@@ -48,7 +46,6 @@ export class AdminCustomersService {
     return { items: rows, total, page: query.page, pageSize: query.pageSize };
   }
 
-  /** One customer: orders with items and how much of each is refunded or pending, and every refund request. */
   async detail(customerId: string): Promise<AdminCustomerDetailDto | null> {
     const [customer] = await this.db.select().from(customers).where(eq(customers.id, customerId));
     if (!customer) return null;

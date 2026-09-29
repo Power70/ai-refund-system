@@ -1,6 +1,5 @@
 import type { FactName, RefundReason, ComparisonValue, FactCondition, PolicyCondition, PolicyDocument, PolicyOutcome, PolicyRule } from './policy-schema.js';
 
-/** Plain-English wording used when the policy is rendered for people. */
 export const BOOLEAN_FACT_PHRASES: Partial<Record<FactName, { true: string; false: string }>> = {
   'item.delivered': { true: 'the item has been delivered', false: 'the item has not been delivered' },
   'item.finalSale': { true: 'the item is final sale', false: 'the item is not final sale' },
@@ -23,7 +22,7 @@ export const FACT_LABELS: Record<FactName, string> = {
   'customer.requestsLast30Days': "the number of the customer's refund requests in the last 30 days",
 };
 
-/** Facts holding money in minor units; rendered as currency. */
+/** Facts in minor units (cents); rendered as currency. */
 export const MONEY_FACTS: ReadonlySet<FactName> = new Set([
   'request.candidateAmountMinor',
   'order.refundedOrPendingMinor',
@@ -45,12 +44,11 @@ const COMPARISON_WORDS = {
   gte: 'is at least',
   lt: 'is less than',
   lte: 'is at most',
-  // Lists are handled separately; these only apply to a single value.
+  // Single-value form only; lists are handled in describeFact.
   in: 'is',
   notIn: 'is not',
 } as const;
 
-/** Renders a validated condition as a plain-English phrase, e.g. "days since delivery is more than 30". */
 export function describeCondition(condition: PolicyCondition, currency: string): string {
   if ('all' in condition) return condition.all.map((c) => wrap(c, currency)).join(' and ');
   if ('any' in condition) return condition.any.map((c) => wrap(c, currency)).join(' or ');
@@ -58,7 +56,7 @@ export function describeCondition(condition: PolicyCondition, currency: string):
   return describeFact(condition, currency);
 }
 
-/** Parenthesise nested groups so "A and (B or C)" keeps its meaning. */
+/** Parenthesises nested groups to preserve precedence. */
 function wrap(condition: PolicyCondition, currency: string): string {
   const text = describeCondition(condition, currency);
   return 'all' in condition || 'any' in condition ? `(${text})` : text;
@@ -75,7 +73,7 @@ function describeFact({ fact, op, value }: FactCondition, currency: string): str
   if (Array.isArray(value)) {
     const items = (value as ReadonlyArray<number | string>).map((v) => formatValue(fact, v, currency));
     if (items.length === 1) return `${label} ${op === 'in' ? 'is' : 'is not'} ${items[0]}`;
-    // "one of" / "none of" keeps lists unambiguous next to "and"/"or".
+    // "one of"/"none of" avoids ambiguity with the "and"/"or" joiners.
     return `${label} is ${op === 'in' ? 'one of' : 'none of'} ${items.join(', ')}`;
   }
   return `${label} ${COMPARISON_WORDS[op]} ${formatValue(fact, value as ComparisonValue, currency)}`;
@@ -95,10 +93,7 @@ const OUTCOME_LABELS: Record<PolicyOutcome, string> = {
   REVIEW: 'Needs review',
 };
 
-/**
- * The policy's customer-facing explanations that are safe to share before a decision: reasons
- * from item rules that allow or deny. Review rules and request rules are internal.
- */
+/** Public reasons safe to share before a decision; REVIEW and request rules are internal. */
 export function customerPolicyNotes(policy: PolicyDocument): string[] {
   return [...new Set(policy.lineRules.filter((rule) => rule.outcome !== 'REVIEW').map((rule) => rule.publicReason))];
 }
@@ -106,10 +101,7 @@ export function customerPolicyNotes(policy: PolicyDocument): string[] {
 export const GENERATED_NOTICE =
   '<!-- GENERATED from refund-policy.yaml by `npm run policy:docs` (in backend/). Do not edit by hand. -->';
 
-/**
- * Renders the policy as the customer- and staff-readable document. Deterministic:
- * the same YAML always gives byte-identical output, so a test can detect drift.
- */
+/** Deterministic (byte-identical for the same YAML) so tests can detect drift. */
 export function renderPolicyMarkdown(policy: PolicyDocument): string {
   const effective = new Intl.DateTimeFormat('en-GB', { dateStyle: 'long', timeZone: 'UTC' }).format(
     new Date(policy.effectiveFrom),

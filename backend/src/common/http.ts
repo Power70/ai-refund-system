@@ -38,13 +38,9 @@ export function setupSwagger(app: INestApplication): void {
   SwaggerModule.setup(DOCS_PATH, app, document);
 }
 
-/**
- * Applies the HTTP hardening shared by the real server and the e2e tests,
- * so tests exercise exactly what runs in production.
- */
+/** HTTP hardening shared by the server and the e2e tests, so tests exercise production behaviour. */
 export function configureApp(app: NestExpressApplication): void {
-  // Behind Nginx on a private Docker network: trust only private proxy hops,
-  // so rate limiting (added later) sees the real client IP.
+  // Behind Nginx on a private Docker network: trust only private proxy hops so rate limiting sees the real client IP.
   app.set('trust proxy', 'loopback, uniquelocal');
   app.setGlobalPrefix(API_PREFIX);
   app.use(correlationMiddleware);

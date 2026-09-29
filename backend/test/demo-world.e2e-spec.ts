@@ -14,10 +14,7 @@ import { createTestDatabase, demoOrder, requestByPublicId, TEST_SEED, type TestD
 
 const DAY_MS = 86_400_000;
 
-/**
- * The whole demo world, end to end: catalog + real policy + seeded history, then every
- * policy-level scenario from the plan through the real fact builder and engine.
- */
+/** Catalog, real policy and seeded history, with every policy scenario run through the real fact builder and engine. */
 describe('demo world (e2e, real PostgreSQL)', () => {
   let testDb: TestDatabase;
   let pool: pg.Pool;

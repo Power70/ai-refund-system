@@ -21,7 +21,7 @@ const KEY_PREFIXES: [prefix: string, provider: ProviderId][] = [
   ['sk-or-', 'openrouter'],
   ['gsk_', 'groq'],
   ['AIza', 'gemini'],
-  // Google AI Studio's newer key format.
+  // Google AI Studio key format.
   ['AQ.', 'gemini'],
   ['sk-', 'openai'],
 ];

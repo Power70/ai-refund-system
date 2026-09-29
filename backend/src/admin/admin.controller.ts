@@ -79,7 +79,7 @@ export class AdminController {
     return this.admin.metrics();
   }
 
-  /** Always 200; the public /health endpoint is the one used for liveness. */
+  /** Always 200; liveness uses the public /health endpoint. */
   @Get('health')
   @ApiOkResponse({ type: DetailedHealthDto })
   detailedHealth(): Promise<DetailedHealthDto> {

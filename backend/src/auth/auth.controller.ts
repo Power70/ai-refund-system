@@ -14,7 +14,6 @@ import { ADMIN_COOKIE_PATH, ADMIN_SESSION_COOKIE, SESSION_COOKIE, sessionCookieO
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
 
-  /** Signs in with email + password and sets the session cookie. */
   @Post()
   @HttpCode(HttpStatus.OK)
   @LoginRateLimit()

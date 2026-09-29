@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { defineConfig } from 'vitest/config';
 
-// Made up per run, so no password is written in the code.
+// Generated per run so no password is committed.
 const testSecret = () => `T${randomBytes(18).toString('base64url')}`;
 
 export default defineConfig({

@@ -64,7 +64,7 @@ export class AdminQueueDto {
   @ApiProperty() pageSize: number;
 }
 
-/** Everything a reviewer needs to decide an escalation. Customer text is data: render as plain text. */
+/** Customer text is untrusted: render as plain text. */
 export class CaseBriefDto {
   @ApiProperty() request: {
     requestId: string;
@@ -115,7 +115,7 @@ export class CaseBriefDto {
     flags: { injectionAttempt: boolean; mentionsOtherCustomerOrder: boolean; abusive: boolean; offTopic: boolean };
     priorFlaggedConversation: boolean;
     transcript: { role: string; text: string; typed: boolean; at: string }[];
-    /** Customer quotes the AI cited; highlight them in the transcript. */
+    /** Customer quotes cited by the AI. */
     evidenceQuotes: string[];
   } | null;
   @ApiProperty({ description: 'What the AI proposed next to what the customer confirmed' }) claim: {
@@ -174,7 +174,7 @@ export class LineDecisionDto {
   approve: boolean;
 }
 
-/** A reviewer's decision: yes or no for every line, plus a note. Amounts are never accepted. */
+/** Amounts are never accepted; they derive from approved lines. */
 export class ResolveEscalationDto {
   @ApiProperty({ type: [LineDecisionDto], description: 'Exactly one decision for every line of the request' })
   @ValidateNested({ each: true })

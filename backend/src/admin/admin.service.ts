@@ -11,12 +11,11 @@ import type { AdminMetricsDto, AdminQueueDto, AdminQueueQueryDto, CaseBriefDto, 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const TOP_REASONS = 10;
 
-/** Escapes LIKE wildcards so user search text matches literally (default escape char: backslash). */
+/** Escapes LIKE wildcards for literal matching (default escape char: backslash). */
 export function escapeLike(text: string): string {
   return text.replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
-/** Read models for the support dashboard: the queue, one case in full, and counters. */
 @Injectable()
 export class AdminService {
   constructor(
@@ -25,10 +24,7 @@ export class AdminService {
     private readonly llm: LlmService,
   ) {}
 
-  /**
-   * The support queue. "needs-review" = escalations nobody has resolved yet, oldest first
-   * (so none are forgotten); "all" = everything, newest first. One query per page plus a count.
-   */
+  /** "needs-review": unresolved escalations, oldest first; "all": newest first. */
   async queue(query: AdminQueueQueryDto): Promise<AdminQueueDto> {
     const lineSummary = this.db
       .select({
@@ -108,7 +104,6 @@ export class AdminService {
     };
   }
 
-  /** The full case for one request (by public id), or null. */
   async caseBrief(publicId: string): Promise<CaseBriefDto | null> {
     const [row] = await this.db
       .select({ request: refundRequests, customer: customers, order: orders })
@@ -243,7 +238,7 @@ export class AdminService {
     };
   }
 
-  /** Dashboard counters, including seeded demo history. */
+  /** Includes seeded history. */
   async metrics(now = new Date()): Promise<AdminMetricsDto> {
     const [counts, topEscalationReasons, stuckProcessingCount] = await Promise.all([
       this.countRequests(now),

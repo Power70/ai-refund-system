@@ -9,10 +9,8 @@ import { customers, decisions, orderItems, orders, policyVersions, refundRequest
 import type { LineEvaluation, PolicyStatus } from '../policy/policy-engine.js';
 
 /**
- * Plain, policy-worded message used when no AI reply is available (and for seeded history).
- * Uses only the policy's own customer-facing reasons, so it can never state anything the
- * rules didn't decide. Escalations never reveal why (no fraud signals, no thresholds).
- * `status` is the final status, after the safety gate.
+ * Fallback when no AI reply is available. Uses only the policy's public reasons; escalations
+ * never reveal why. `status` is the post-gate status.
  */
 export function templateCustomerMessage(
   status: PolicyStatus,
@@ -30,7 +28,6 @@ export function templateCustomerMessage(
   }
 }
 
-/** Shown when a request couldn't be checked automatically and a person will decide it. */
 export const SYSTEM_FAILURE_CUSTOMER_MESSAGE =
   "Thanks for your patience. We need a little more time to look at your request, and we'll get back to you as soon as possible.";
 
@@ -39,10 +36,7 @@ export interface ResolvedItem {
   approve: boolean;
 }
 
-/**
- * What the customer sees after a person resolves their escalated request. It names the items
- * and the total, both taken from the stored resolution, and never quotes the reviewer's internal note.
- */
+/** Built from the stored resolution only; never quotes the reviewer's internal note. */
 export function resolutionCustomerMessage(outcome: ResolutionOutcome, items: readonly ResolvedItem[], approvedAmountMinor: number, currency: string): string {
   const names = (approve: boolean) => items.filter((i) => i.approve === approve).map((i) => i.itemName).join(', ');
   switch (outcome) {
@@ -55,10 +49,7 @@ export function resolutionCustomerMessage(outcome: ResolutionOutcome, items: rea
   }
 }
 
-// ---------------------------------------------------------------------------
-// AI-written replies after a decision. The decision itself is never changed: the model writes
-// prose with placeholders, code checks it and fills the placeholders from stored values.
-
+// The model writes prose with placeholders; code validates it and fills values from stored data.
 export const MAX_CUSTOMER_REPLY_CHARS = 800;
 
 export interface DecisionBrief {
@@ -68,9 +59,8 @@ export interface DecisionBrief {
   currency: string;
   approvedAmountMinor: number;
   reviewEtaBusinessDays: number;
-  /** refunded: true/false once decided, null while a person reviews it. */
+  /** `refunded` is null while under review. */
   items: { name: string; quantity: number; refunded: boolean | null; publicReason: string | null }[];
-  /** Set when a person resolved the request. */
   reviewedBySupport: boolean;
 }
 
@@ -121,7 +111,7 @@ function placeholderValues(brief: DecisionBrief): Record<Placeholder, string> {
   };
 }
 
-/** The facts given to the model. Amounts and names stay out; the model uses placeholders. */
+/** Model input. Amounts are withheld; the model must use placeholders. */
 function describeBrief(brief: DecisionBrief): string {
   const outcome = (refunded: boolean | null) => (refunded === null ? 'under review' : refunded ? 'refunded' : 'not refunded');
   const items = brief.items.map((i) => `- ${i.name.replace(/[<>]/g, ' ')}, quantity ${i.quantity}: ${outcome(i.refunded)}${i.publicReason ? `. Reason: "${i.publicReason}"` : ''}`);
@@ -134,9 +124,8 @@ function describeBrief(brief: DecisionBrief): string {
 }
 
 /**
- * Checks model prose before it reaches the customer: placeholders, no currency or invented
- * numbers, no contact details or internal terms, and nothing contradicting the status.
- * The contradiction lexicon is a heuristic.
+ * Rejects model prose with disallowed placeholders, currency, unknown numbers, contact details,
+ * internal terms or wording contradicting the status (heuristic lexicon).
  */
 export function isSafeCustomerReply(text: string, brief: DecisionBrief, factsText: string, options: { followUp?: boolean } = {}): boolean {
   if (text.length === 0 || text.length > MAX_CUSTOMER_REPLY_CHARS) return false;
@@ -157,7 +146,7 @@ export function isSafeCustomerReply(text: string, brief: DecisionBrief, factsTex
 
 export function fillPlaceholders(text: string, brief: DecisionBrief): string {
   const values = placeholderValues(brief);
-  // Quoted reasons end with a full stop, so models often add a second one.
+  // Collapse the double full stop left after quoted reasons.
   return text.replace(/\{\{\s*([a-z_]+)\s*\}\}/g, (_, name: Placeholder) => values[name]).replace(/(?<!\.)\.\.(?!\.)/g, '.');
 }
 
@@ -193,7 +182,7 @@ export const disputeMessage = (brief: DecisionBrief) =>
   `I understand. If you believe this decision is wrong, please contact our support team and quote your request ID ${brief.requestId}.`;
 
 
-/** Writes and answers customer-facing messages about decisions. The decision itself is never changed here. */
+/** Customer-facing messages about decisions; never alters the decision. */
 @Injectable()
 export class CustomerMessagesService {
   constructor(
@@ -201,7 +190,7 @@ export class CustomerMessagesService {
     private readonly llm: LlmService,
   ) {}
 
-  /** The customer message for a new decision: checked AI prose, or the template. */
+  /** Validated AI prose, or the template on any failure. */
   async writeDecisionReply(brief: DecisionBrief): Promise<GeneratedReply> {
     const template = decisionTemplate(brief);
     if (!this.llm.enabled) return { text: template, source: 'TEMPLATE', call: null };
@@ -222,7 +211,6 @@ export class CustomerMessagesService {
     };
   }
 
-  /** Answers a question about a decided request. The answer is checked in full before it is shown. */
   async answerFollowUp(brief: DecisionBrief, question: string): Promise<GeneratedReply> {
     const template = followUpTemplate(brief);
     if (!this.llm.enabled) return { text: template, source: 'TEMPLATE', call: null };
@@ -244,7 +232,7 @@ export class CustomerMessagesService {
     };
   }
 
-  /** The effective decision (a person's resolution wins) as a brief, or null while processing. */
+  /** Effective decision (a review resolution takes precedence), or null while processing. */
   async decisionBrief(requestId: string): Promise<DecisionBrief | null> {
     const [row] = await this.db
       .select({ request: refundRequests, decision: decisions, resolution: reviewResolutions, name: customers.name, currency: orders.currency, policy: policyVersions.content })
@@ -277,7 +265,7 @@ export class CustomerMessagesService {
         name: l.name,
         quantity: l.quantity,
         refunded: l.status === 'UNDER_REVIEW' || l.status === null ? null : l.status === 'REFUNDED',
-        // Escalations and a person's decision carry no policy reason.
+        // Escalations and review resolutions carry no policy reason.
         publicReason: !resolution && decision.status !== 'ESCALATED' ? (publicReasons.get(l.itemId) ?? null) : null,
       })),
       reviewedBySupport: resolution !== null,

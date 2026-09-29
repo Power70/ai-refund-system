@@ -1,8 +1,7 @@
 # One command: `docker-compose up` (or `docker compose up`).
-# Secrets have no defaults: copy .env.example to .env and fill in the required values.
-# Compose reads .env automatically for ${...} values and stops with a message naming
-# any that are missing. No env_file directive is used, so both legacy docker-compose
-# and Compose v2 work.
+# Passwords fall back to local demo values; set your own in .env (see .env.example).
+# Compose reads .env automatically for ${...} values. No env_file directive is used,
+# so both legacy docker-compose and Compose v2 work.
 
 # Containers never gain privileges after start (no setuid), and the app containers drop
 # every Linux capability; none of them needs one.
@@ -17,7 +16,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-refund}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-refund_demo_password}
       POSTGRES_DB: ${POSTGRES_DB:-refund_support}
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -38,12 +37,12 @@ services:
     command: ["sh", "-c", "node dist/database/run-migrations.js && node dist/database/seed/run-seed.js"]
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://${POSTGRES_USER:-refund}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-refund_support}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-refund}:${POSTGRES_PASSWORD:-refund_demo_password}@db:5432/${POSTGRES_DB:-refund_support}
       # The demo history is decided under the refund policy, so seeding registers it first.
       POLICY_FILE: /app/policy/refund-policy.yaml
       # Demo customer N (1 to 15) signs in as <local>+N@<domain> of this address, with this password.
-      SEED_CUSTOMER_EMAIL: ${SEED_CUSTOMER_EMAIL:?Set SEED_CUSTOMER_EMAIL in .env (see .env.example)}
-      SEED_CUSTOMER_PASSWORD: ${SEED_CUSTOMER_PASSWORD:?Set SEED_CUSTOMER_PASSWORD in .env (see .env.example)}
+      SEED_CUSTOMER_EMAIL: ${SEED_CUSTOMER_EMAIL:-nwisuanu@gmail.com}
+      SEED_CUSTOMER_PASSWORD: ${SEED_CUSTOMER_PASSWORD:-customer}
     volumes:
       - ./policy:/app/policy:ro
     depends_on:
@@ -59,10 +58,9 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgresql://${POSTGRES_USER:-refund}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-refund_support}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-refund}:${POSTGRES_PASSWORD:-refund_demo_password}@db:5432/${POSTGRES_DB:-refund_support}
       POLICY_FILE: /app/policy/refund-policy.yaml
-      # Support dashboard password. Required; the API refuses short or well-known ones.
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env (see .env.example)}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin}
       # API reference at /docs. Off unless set to true.
       API_DOCS: ${API_DOCS:-false}
       # Any supported provider key; the provider is detected from its prefix. Empty = AI disabled.

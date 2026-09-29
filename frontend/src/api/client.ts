@@ -155,9 +155,6 @@ export const api = {
   refundRequests: () => request<RefundRequestView[]>('GET', '/customer/refund-requests'),
 }
 
-// ---------------------------------------------------------------------------
-// Support dashboard (Bearer admin token, kept in memory only)
-
 export type ResolutionOutcome = 'APPROVED' | 'PARTIALLY_APPROVED' | 'DENIED'
 export type QueueView = 'needs-review' | 'all'
 

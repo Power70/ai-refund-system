@@ -1,6 +1,6 @@
 import type { FactValues, PolicyOutcome, FactValue, ComparisonValue, FactCondition, PolicyCondition, PolicyRule, PolicyDocument } from './policy-schema.js';
 
-/** A rule referenced a fact the fact builder didn't supply: a programming error, never a customer's fault. */
+/** Programming error: a rule referenced a fact the fact builder did not supply. */
 export class MissingFactError extends Error {
   constructor(readonly fact: string) {
     super(`Fact "${fact}" was not provided to the policy evaluator`);
@@ -8,7 +8,7 @@ export class MissingFactError extends Error {
   }
 }
 
-/** The caller passed malformed input to the policy engine: a programming error, never a customer's fault. */
+/** Programming error: malformed input from the caller. */
 export class InvalidEvaluationInputError extends Error {
   constructor(message: string) {
     super(`Invalid policy evaluation input: ${message}`);
@@ -18,15 +18,12 @@ export class InvalidEvaluationInputError extends Error {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/**
- * Whole days elapsed from `from` to `to`, rounded down (UTC, no DST effects).
- * Day 30 of a 30-day window is day 30 until a full 31st day has passed.
- */
+/** Rounded down; fixed 24h days, so no DST effects. */
 export function wholeDaysBetween(from: Date, to: Date): number {
   return Math.floor((to.getTime() - from.getTime()) / DAY_MS);
 }
 
-/** One rule's result, kept for the audit trail whether it matched or not. */
+/** Recorded for every rule, matched or not, for the audit trail. */
 export interface RuleTraceEntry {
   ruleId: string;
   outcome: PolicyOutcome;
@@ -35,28 +32,28 @@ export interface RuleTraceEntry {
 
 export interface RuleSetResult {
   trace: RuleTraceEntry[];
-  /** Winning outcome among matched rules, or null when nothing matched. */
+  /** Null when nothing matched. */
   outcome: PolicyOutcome | null;
-  /** First matched rule (in file order) carrying the winning outcome. */
+  /** First matched rule in file order with the winning outcome. */
   decidingRuleId: string | null;
 }
 
 export interface LineInput {
   lineId: string;
-  /** Refund amount for this line in minor units, computed from the DB. */
+  /** Minor units (cents), from the DB. */
   amountMinor: number;
   facts: FactValues;
 }
 
 export interface LineEvaluation extends LineInput {
   outcome: PolicyOutcome;
-  /** null when no rule matched and the policy default applied. */
+  /** Null when the policy default applied. */
   decidingRuleId: string | null;
   publicReason: string;
   trace: RuleTraceEntry[];
 }
 
-/** Request-level facts supplied by the caller; the engine derives the rest. */
+/** Caller-supplied request facts; the engine derives the rest. */
 export interface RequestHistoryFacts {
   'order.refundedOrPendingMinor': number;
   'customer.requestsLast30Days': number;
@@ -66,25 +63,21 @@ export type PolicyStatus = 'APPROVED' | 'DENIED' | 'ESCALATED';
 
 export interface RequestEvaluation {
   policyVersion: string;
-  /** APPROVED here still has to pass the AI safety gate before it is final. */
+  /** Pre-gate status; APPROVED may still be escalated by the safety gate. */
   status: PolicyStatus;
   /** Sum of ALLOW lines when APPROVED, otherwise 0. */
   approvedAmountMinor: number;
   lines: LineEvaluation[];
-  /** False when every line was denied, so request rules were never consulted. */
+  /** False when every line was denied. */
   requestRulesEvaluated: boolean;
   requestFacts: FactValues | null;
   requestTrace: RuleTraceEntry[];
   requestDecidingRuleId: string | null;
-  /** Rule ids (or "DEFAULT") that sent the request to a person. */
+  /** REVIEW rule ids, or "DEFAULT" for unmatched lines. */
   escalationRuleIds: string[];
 }
 
-/**
- * Evaluates a validated condition against facts.
- * Null semantics: every comparison against a null fact is false; only "isNull" matches null.
- * So "daysSinceDelivery > 30" is false for an undelivered item, and so is "<= 30".
- */
+/** Any comparison against a null fact is false; only "isNull" matches null. */
 export function evaluateCondition(condition: PolicyCondition, facts: FactValues): boolean {
   if ('all' in condition) return condition.all.every((c) => evaluateCondition(c, facts));
   if ('any' in condition) return condition.any.some((c) => evaluateCondition(c, facts));
@@ -120,7 +113,6 @@ function compare({ fact, op, value }: FactCondition, facts: FactValues): boolean
   }
 }
 
-/** Returns the outcome listed earliest in the policy's precedence, or null for an empty list. */
 export function pickByPrecedence(
   outcomes: readonly PolicyOutcome[],
   precedence: readonly PolicyOutcome[],
@@ -131,11 +123,7 @@ export function pickByPrecedence(
   return null;
 }
 
-/**
- * Evaluates every rule (no short-circuit, so the audit trace is complete) and
- * picks the winning outcome by precedence. The deciding rule is the first rule,
- * in file order, that matched with the winning outcome.
- */
+/** Evaluates every rule without short-circuiting so the audit trace is complete. */
 export function evaluateRuleSet(
   rules: readonly PolicyRule[],
   facts: FactValues,
@@ -152,7 +140,7 @@ export function evaluateRuleSet(
   return { trace, outcome, decidingRuleId };
 }
 
-/** Decides one requested item. If no rule matches, the policy's (fail-safe) default applies. */
+/** Falls back to the policy's fail-safe default when no rule matches. */
 export function evaluateLine(policy: PolicyDocument, line: LineInput): LineEvaluation {
   const result = evaluateRuleSet(policy.lineRules, line.facts, policy.precedence);
   const rule = result.decidingRuleId ? policy.lineRules.find((r) => r.id === result.decidingRuleId) : undefined;
@@ -167,15 +155,9 @@ export function evaluateLine(policy: PolicyDocument, line: LineInput): LineEvalu
 }
 
 /**
- * Decides a whole refund request:
- *  1. Every line is decided on its own (ALLOW / DENY / REVIEW).
- *  2. All lines DENY → DENIED. Request rules are not consulted, so DENY beats REVIEW
- *     at request level too (e.g. a frequent requester with an expired order is denied).
- *  3. Otherwise request rules run on the ALLOW lines' amounts, plus what is already
- *     refunded or pending on the order (this closes the split-request loophole).
- *  4. A request-level DENY → DENIED. Any line REVIEW or request-level REVIEW → ESCALATED.
- *  5. Otherwise APPROVED for the ALLOW lines; DENY lines are reported as not refunded.
- * Amounts are integer minor units only.
+ * All lines DENY → DENIED without consulting request rules. Otherwise request rules see the
+ * ALLOW amount plus what is already refunded or pending on the order (prevents split requests).
+ * Request DENY → DENIED; any REVIEW → ESCALATED; else APPROVED. Amounts are integer minor units.
  */
 export function evaluateRequest(
   policy: PolicyDocument,

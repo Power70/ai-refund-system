@@ -27,7 +27,7 @@ describe('admin resolution API (e2e)', () => {
     pool = createPgPool(testDb.url);
     db = drizzle(pool, { schema }) as Database;
 
-    // Grace returns both shirts (no AI yet → a person decides); Femi's mat crosses $500 on the order; Ben's lamp is denied.
+    // Fixtures: manual review without AI (Grace), order over $500 (Femi), denied (Ben).
     grace = await customerClient(app, 'customer+7@example.test');
     const both = [grace.itemId('Linen shirt, blue'), grace.itemId('Linen shirt, white')].map((itemId) => ({ itemId, quantity: 1 }));
     ids.grace = (await grace.submit({ orderNumber: 'WN-4GK1VS', reason: 'CHANGED_MIND', lines: both }).expect(201)).body.requestId;

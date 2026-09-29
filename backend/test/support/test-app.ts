@@ -95,10 +95,7 @@ export async function prepareDemoDatabase(): Promise<TestDatabase> {
 export const CSRF = { 'X-Requested-With': 'refund-app' };
 
 let visitor = 0;
-/**
- * A distinct client IP per call (TEST-NET-2 range), so tests behave like separate visitors
- * and never trip the per-IP sign-in limit meant for real attackers.
- */
+/** A distinct client IP per call (TEST-NET-2) so tests never trip the per-IP sign-in limit. */
 export function asVisitor(): { 'X-Forwarded-For': string } {
   visitor = (visitor % 250) + 1;
   return { 'X-Forwarded-For': `198.18.${Math.floor(Math.random() * 250)}.${visitor}` };
@@ -114,7 +111,7 @@ export async function signIn(app: NestExpressApplication, email: string): Promis
 
 interface OrderItem { id: string; name: string; refundableQuantity: number }
 
-/** A signed-in customer: find item ids by name and submit claims like the frontend will. */
+/** A signed-in customer that looks up item ids by name and submits claims as the frontend does. */
 export async function customerClient(app: NestExpressApplication, email: string) {
   const cookie = await signIn(app, email);
   const server = app.getHttpServer();
@@ -137,10 +134,7 @@ export async function customerClient(app: NestExpressApplication, email: string)
   };
 }
 
-/**
- * A request left PROCESSING by a worker that died: what a crash between transaction 1
- * and transaction 2 leaves behind.
- */
+/** A request left PROCESSING, as a worker crash between transactions 1 and 2 would leave it. */
 export async function strandedRequest(
   db: Database,
   options: { orderNumber: string; sku: string; reason: RefundReason; leaseExpiresAt: Date; attemptCount?: number },

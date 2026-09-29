@@ -7,10 +7,9 @@ import { DATABASE, type Database } from '../database/database.providers.js';
 import { policyVersions } from '../database/schema.js';
 import { parsePolicy, policyDocumentSchema, type PolicyDocument } from './policy-schema.js';
 
-/** Injection token for the policy YAML path (overridable in tests). */
+/** Injection token for the policy YAML path. */
 export const POLICY_FILE_PATH = Symbol('POLICY_FILE_PATH');
 
-/** No registered policy is in force at the requested time. */
 export class NoActivePolicyError extends Error {
   constructor(at: Date) {
     super(`No refund policy is in force at ${at.toISOString()}`);
@@ -18,7 +17,7 @@ export class NoActivePolicyError extends Error {
   }
 }
 
-/** The policy file conflicts with what is registered; stops startup with the reason. */
+/** Policy file conflicts with registered versions; fatal at startup. */
 export class PolicyRegistrationError extends Error {
   constructor(message: string) {
     super(`Refund policy not registered: ${message}`);
@@ -41,13 +40,13 @@ export interface RegistrationResult {
 
 type PolicyVersionRow = typeof policyVersions.$inferSelect;
 
-/** Fingerprint of the rules. Excludes the version label; ignores comments, formatting and key order. */
+/** Excludes the version label; independent of YAML comments, formatting and key order. */
 export function hashPolicy(policy: PolicyDocument): string {
   const { version: _label, ...rules } = policy;
   return createHash('sha256').update(canonicalJson(rules)).digest('hex');
 }
 
-/** Maps a stored row to a policy, rejecting rows whose content no longer matches their hash. */
+/** Rejects rows whose content no longer matches their hash. */
 export function toRegisteredPolicy(row: PolicyVersionRow): RegisteredPolicy {
   const parsed = policyDocumentSchema.safeParse(row.content);
   if (!parsed.success || hashPolicy(parsed.data) !== row.contentHash) {
@@ -63,9 +62,8 @@ export interface ExistingVersions {
 }
 
 /**
- * Registration rules: the same file is a no-op; a version label can't name different rules;
- * identical rules can't get a second label; a new version can't take effect before the latest one.
- * Returns the existing row to reuse, or null when a new version should be inserted.
+ * Same file is a no-op; a label can't name different rules; identical rules can't get a second
+ * label; effectiveFrom must be after the latest version. Returns a row to reuse, or null to insert.
  */
 export function checkRegistration(document: PolicyDocument, contentHash: string, existing: ExistingVersions): PolicyVersionRow | null {
   const { sameVersion, sameContent, latest } = existing;
@@ -84,10 +82,9 @@ export function checkRegistration(document: PolicyDocument, contentHash: string,
   return null;
 }
 
-// Serialises registration across API instances starting at the same time.
+// Advisory lock key: serialises registration across concurrently starting instances.
 const REGISTRATION_LOCK_KEY = 815_224_001;
 
-/** Versioned refund policies: registration at startup and lookup by time or id. */
 @Injectable()
 export class PolicyService implements OnModuleInit {
   private readonly logger = new Logger(PolicyService.name);
@@ -97,7 +94,6 @@ export class PolicyService implements OnModuleInit {
     @Inject(POLICY_FILE_PATH) private readonly policyFilePath: string,
   ) {}
 
-  /** Validates and registers the policy file; any problem stops startup with the reason. */
   async onModuleInit(): Promise<void> {
     const { policy } = await this.registerPolicyFile();
     const active = await this.activePolicy();
@@ -106,7 +102,6 @@ export class PolicyService implements OnModuleInit {
     }
   }
 
-  /** Parses the configured policy file and registers it. */
   async registerPolicyFile(): Promise<RegistrationResult> {
     const result = await this.register(parsePolicy(await readFile(this.policyFilePath, 'utf8')));
     const { policy, created } = result;
@@ -114,12 +109,12 @@ export class PolicyService implements OnModuleInit {
     return result;
   }
 
-  /** Records a policy version once (see checkRegistration for the rules). */
+  /** Idempotent; see checkRegistration. */
   async register(document: PolicyDocument): Promise<RegistrationResult> {
     const contentHash = hashPolicy(document);
     return this.db.transaction(async (tx) => {
       await tx.execute(sql`SELECT pg_advisory_xact_lock(${REGISTRATION_LOCK_KEY})`);
-      // Sequential: a transaction runs on one connection, which executes one query at a time.
+      // Sequential: a transaction's connection runs one query at a time.
       const [sameVersion] = await tx.select().from(policyVersions).where(eq(policyVersions.version, document.version));
       const [sameContent] = await tx.select().from(policyVersions).where(eq(policyVersions.contentHash, contentHash));
       const [latest] = await tx.select().from(policyVersions).orderBy(desc(policyVersions.effectiveFrom)).limit(1);
@@ -134,14 +129,13 @@ export class PolicyService implements OnModuleInit {
     });
   }
 
-  /** The policy in force at `at`: the latest version whose effectiveFrom is not in the future. */
+  /** Latest version with effectiveFrom <= `at`. */
   async activePolicy(at: Date = new Date(), db: Database = this.db): Promise<RegisteredPolicy> {
     const [row] = await db.select().from(policyVersions).where(lte(policyVersions.effectiveFrom, at)).orderBy(desc(policyVersions.effectiveFrom)).limit(1);
     if (!row) throw new NoActivePolicyError(at);
     return toRegisteredPolicy(row);
   }
 
-  /** A specific version, e.g. the one captured when a request was submitted. */
   async policyById(id: string): Promise<RegisteredPolicy> {
     const [row] = await this.db.select().from(policyVersions).where(eq(policyVersions.id, id));
     if (!row) throw new Error(`Policy version ${id} not found`);

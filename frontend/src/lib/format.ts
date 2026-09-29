@@ -21,7 +21,6 @@ export function formatCode(code: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
-/** "1 order", "2 orders". */
 export function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? '' : 's'}`
 }

@@ -38,7 +38,7 @@ export const refundError = domainErrors<RefundErrorCode>({
 /** Injection token: how long a submission waits for its decision before answering 202. */
 export const SUBMIT_WAIT_MS = Symbol('SUBMIT_WAIT_MS');
 
-/** created: a new request (201); replayed: same key and claim seen before (200). */
+/** created → 201; replayed (same key and claim) → 200. */
 export interface SubmissionOutcome {
   kind: 'created' | 'replayed';
   view: CustomerRequestViewDto;
@@ -51,22 +51,19 @@ export interface ReservedRequest {
 
 type RequestLookup = { requestId: string } | { publicId: string };
 
-/** Identifies the claim itself: line order doesn't matter, any real change does. */
+/** Hash of the claim, independent of line order. */
 export function computePayloadHash(dto: SubmitRefundRequestDto): string {
   const claim = {
     orderNumber: dto.orderNumber,
     reason: dto.reason,
     lines: dto.lines.map((l) => ({ itemId: l.itemId.toLowerCase(), quantity: l.quantity })).sort((a, b) => a.itemId.localeCompare(b.itemId)),
-    // Included only when present, so hashes of claims without a conversation are unchanged.
+    // Omitted when absent so hashes of claims without a conversation stay stable.
     ...(dto.conversationId ? { conversationId: dto.conversationId.toLowerCase() } : {}),
   };
   return createHash('sha256').update(canonicalJson(claim)).digest('hex');
 }
 
-/**
- * Thrown inside transaction 1 when, after waiting for the item locks, a request with the same
- * idempotency key already exists (a simultaneous retry won). Answered as a replay, not a conflict.
- */
+/** Thrown in transaction 1 when a concurrent retry with the same key committed first; answered as a replay. */
 class IdempotentReplaySignal extends Error {}
 
 const IDEMPOTENCY_KEY = /^[A-Za-z0-9_-]{8,100}$/;
@@ -74,11 +71,10 @@ const FLAG_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
 const HISTORY_LIMIT = 50;
 const itemNotFound = () => refundError('ORDER_OR_ITEM_NOT_FOUND', "We couldn't find that item in your orders.");
 
-/** Customer refund requests: exactly-once submission and the customer's view of the outcome. */
 @Injectable()
 export class RefundsService implements OnApplicationShutdown {
   private readonly logger = new Logger(RefundsService.name);
-  /** Decisions and case notes still running after their response was sent. */
+  /** Work still running after the response was sent. */
   private readonly background = new Set<Promise<unknown>>();
 
   constructor(
@@ -90,17 +86,11 @@ export class RefundsService implements OnApplicationShutdown {
     private readonly summaries: ReviewSummaryService,
   ) {}
 
-  /** Lets background work finish before the database pool closes. */
   async onApplicationShutdown(): Promise<void> {
     await Promise.allSettled(this.background);
   }
 
-  /**
-   * Submits a confirmed claim exactly once per idempotency key:
-   *  - new key: reserve (transaction 1), decide, store (transaction 2);
-   *  - same key, same claim: return what is stored, finishing it if its worker died;
-   *  - same key, different claim: 409.
-   */
+  /** Exactly once per idempotency key: same key and claim replays; same key, different claim is 409. */
   async submit(customerId: string, idempotencyKey: string | undefined, dto: SubmitRefundRequestDto): Promise<SubmissionOutcome> {
     if (!idempotencyKey || !IDEMPOTENCY_KEY.test(idempotencyKey)) {
       throw refundError('IDEMPOTENCY_KEY_REQUIRED', 'An Idempotency-Key header (8–100 letters, digits, - or _) is required.');
@@ -114,7 +104,7 @@ export class RefundsService implements OnApplicationShutdown {
     try {
       reserved = await this.reserve(customerId, idempotencyKey, payloadHash, dto);
     } catch (error) {
-      // A simultaneous retry with the same key won: answer with its result.
+      // A concurrent retry with the same key committed first.
       if (error instanceof IdempotentReplaySignal || isUniqueViolation(error)) {
         const concurrent = await this.replay(customerId, idempotencyKey, payloadHash);
         if (concurrent) return concurrent;
@@ -126,7 +116,6 @@ export class RefundsService implements OnApplicationShutdown {
     return { kind: 'created', view: (await this.view(customerId, { requestId: reserved.requestId }))! };
   }
 
-  /** "My requests": the customer's own requests, newest first (bounded). */
   async list(customerId: string): Promise<CustomerRequestViewDto[]> {
     const rows = await this.db
       .select({ id: refundRequests.id })
@@ -138,10 +127,7 @@ export class RefundsService implements OnApplicationShutdown {
     return views.filter((v): v is CustomerRequestViewDto => v !== null);
   }
 
-  /**
-   * The customer's view of one of their own requests, or null (also for someone else's).
-   * A reviewer's resolution, when present, is the effective outcome.
-   */
+  /** Null for unknown or other customers' requests. A review resolution overrides the decision. */
   async view(customerId: string, where: RequestLookup): Promise<CustomerRequestViewDto | null> {
     const [row] = await this.db
       .select({ request: refundRequests, orderNumber: orders.orderNumber, decision: decisions, resolution: reviewResolutions })
@@ -166,7 +152,7 @@ export class RefundsService implements OnApplicationShutdown {
       .orderBy(orderItems.name);
 
     const outcome = resolution ? (resolution.outcome === 'DENIED' ? 'DENIED' : 'APPROVED') : (decision?.status ?? 'PROCESSING');
-    // An approval that left some items unrefunded, by the policy or a reviewer, must not read as a full one.
+    // An approval with any unrefunded line must not read as a full approval.
     const status = outcome === 'APPROVED' && lines.some((l) => l.status === 'NOT_REFUNDED') ? 'PARTIALLY_APPROVED' : outcome;
     return {
       requestId: request.publicId,
@@ -179,7 +165,7 @@ export class RefundsService implements OnApplicationShutdown {
     };
   }
 
-  /** An earlier submission with this key, finished first if its worker died; null for a new key. */
+  /** Null for a new key; resumes a submission whose lease expired. */
   protected async replay(customerId: string, idempotencyKey: string, payloadHash: string): Promise<SubmissionOutcome | null> {
     const [existing] = await this.db
       .select()
@@ -197,9 +183,8 @@ export class RefundsService implements OnApplicationShutdown {
   }
 
   /**
-   * Transaction 1: validates the claim and reserves the quantities. Item rows are locked
-   * (SELECT … FOR UPDATE), so simultaneous submissions for one item run one after the other
-   * and the second sees the first one's reservation. Nothing slow (no AI) runs here.
+   * Transaction 1: validates and reserves quantities. Item rows are locked FOR UPDATE so
+   * concurrent submissions for an item serialise. No AI calls inside the transaction.
    */
   protected async reserve(customerId: string, idempotencyKey: string, payloadHash: string, dto: SubmitRefundRequestDto, now = new Date()): Promise<ReservedRequest> {
     return this.db.transaction(async (tx) => {
@@ -214,11 +199,11 @@ export class RefundsService implements OnApplicationShutdown {
         .select({ id: orderItems.id, unitPricePaidMinor: orderItems.unitPricePaidMinor })
         .from(orderItems)
         .where(and(inArray(orderItems.id, itemIds), eq(orderItems.orderId, order.id)))
-        .orderBy(orderItems.id) // consistent lock order: no deadlocks between concurrent submissions
+        .orderBy(orderItems.id) // consistent lock order prevents deadlocks
         .for('update');
       if (items.length !== itemIds.length) throw itemNotFound();
 
-      // Checked before quantities: a simultaneous retry with the same key is the same claim.
+      // Before quantity checks: a concurrent same-key retry must replay, not fail validation.
       const [sameKey] = await tx
         .select({ id: refundRequests.id })
         .from(refundRequests)
@@ -294,10 +279,7 @@ export class RefundsService implements OnApplicationShutdown {
     });
   }
 
-  /**
-   * Snapshots what the safety gate needs. The conversation row is locked and marked SUBMITTED,
-   * which serialises two submissions from the same chat.
-   */
+  /** Snapshot for the safety gate. Locking the conversation row serialises submissions from one chat. */
   private async captureClaimContext(tx: Database, customerId: string, conversationId: string | null, now: Date): Promise<{ context: ClaimContext; proposal: ProposalRecord | null }> {
     const flagged = await tx
       .select({ id: conversations.id })
@@ -342,15 +324,7 @@ export class RefundsService implements OnApplicationShutdown {
     };
   }
 
-  /**
-   * A failure leaves the request PROCESSING with its reservation: the customer sees "processing",
-   * and a retry or the sweeper finishes it once the lease expires.
-   */
-  /**
-   * Decides the request, waiting at most SUBMIT_WAIT_MS: a slow model never holds the response.
-   * On timeout the view is still PROCESSING (202) and the decision finishes in the background;
-   * the case note follows the decision and never delays the customer.
-   */
+  /** Waits at most SUBMIT_WAIT_MS; on timeout the response is 202 and the decision finishes in the background. */
   private async decideWithin(requestId: string, leaseOwner: string): Promise<void> {
     const decided = this.decideSafely(requestId, leaseOwner);
     this.runInBackground(decided.then(() => this.summaries.summarize(requestId)));
@@ -367,6 +341,7 @@ export class RefundsService implements OnApplicationShutdown {
     void work.finally(() => this.background.delete(work));
   }
 
+  /** On failure the request stays PROCESSING and is finished by a retry or the sweeper. */
   private async decideSafely(requestId: string, leaseOwner: string): Promise<void> {
     try {
       await this.decisions.decide(requestId, leaseOwner);

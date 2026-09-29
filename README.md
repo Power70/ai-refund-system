@@ -22,30 +22,28 @@ The AI helps customers explain themselves. It never decides a refund.
 Requirements: Docker with Compose (`docker-compose` or `docker compose`).
 
 ```bash
-cp .env.example .env    # then fill in the REQUIRED values (see below)
 docker-compose up --build
 ```
 
-Open <http://localhost:8080>. Migrations and demo data load automatically.
-
-Passwords and other secrets live only in `.env`, which git ignores; nothing secret is written in the code, and the app refuses to start if one is missing, short or a well-known value. Set:
-
-| Variable | What it is |
-|---|---|
-| `POSTGRES_PASSWORD` | Database password: 12+ characters, letters, digits, `-` and `_` only |
-| `ADMIN_PASSWORD` | Support dashboard password: 12+ characters |
-| `SEED_CUSTOMER_EMAIL` | An address you own, e.g. `you@example.com`. Demo customer N (1 to 15) signs in as `you+N@example.com` |
-| `SEED_CUSTOMER_PASSWORD` | The demo customers' password: 12+ characters |
-
-`openssl rand -hex 24` makes a good value for each password.
+Open <http://localhost:8080>. Migrations and demo data load automatically; no `.env` file is needed.
 
 | | |
 |---|---|
-| Customer app | <http://localhost:8080>: sign in as a demo customer (see [scenarios](#try-the-demo-scenarios)) with `SEED_CUSTOMER_PASSWORD` |
-| Support dashboard | <http://localhost:8080/#/admin>, with `ADMIN_PASSWORD` |
+| Customer app | <http://localhost:8080>: customer N (1 to 15, see [scenarios](#try-the-demo-scenarios)) signs in as `nwisuanu+N@gmail.com` with the password `customer` |
+| Support dashboard | <http://localhost:8080/#/admin>, password `admin` |
 | API docs (Swagger) | <http://localhost:8080/docs>, when `API_DOCS=true` |
 
-To enable the AI, also set `LLM_API_KEY` in `.env`.
+These are local demo values. To change them, or to enable the AI, copy `.env.example` to `.env` (git-ignored) and set the values there:
+
+| Variable | Demo value | What it is |
+|---|---|---|
+| `LLM_API_KEY` | empty (AI off) | Any supported provider key |
+| `ADMIN_PASSWORD` | `admin` | Support dashboard password |
+| `SEED_CUSTOMER_EMAIL` | `nwisuanu@gmail.com` | Demo customer N signs in as `<local>+N@<domain>` of this address |
+| `SEED_CUSTOMER_PASSWORD` | `customer` | The demo customers' shared password |
+| `POSTGRES_PASSWORD` | `refund_demo_password` | Database password (letters, digits, `-` and `_`) |
+
+Use your own passwords for anything beyond a local demo; `openssl rand -hex 24` makes a good one. After changing the seed or database values, recreate the database with `docker-compose down -v`.
 
 Without a key the app still works end to end: the chat switches to a short form, the policy still decides, and refunds it would approve go to a reviewer instead of being paid automatically.
 
@@ -55,11 +53,11 @@ Check a running stack with the smoke test (bash and curl; on Windows use Git Bas
 docker-compose down -v && docker-compose up -d --build && ./scripts/smoke.sh
 ```
 
-It reads the passwords from `.env` and checks health, security headers, access control, idempotency and five seeded scenarios through the web proxy.
+It uses the same passwords as the stack (from `.env`, or the demo values) and checks health, security headers, access control, idempotency and four seeded scenarios through the web proxy.
 
 ## Configuration
 
-`.env.example` documents every variable. Compose reads `.env` from the project root. The four secrets in [Quick start](#quick-start) are required; everything else has a default.
+`.env.example` documents every variable. Compose reads `.env` from the project root when one exists; every variable has a default.
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -70,12 +68,12 @@ It reads the passwords from `.env` and checks health, security headers, access c
 | `ANTHROPIC_WORKSPACE_ID` | empty | Anthropic organization-level keys only: the workspace (`wrkspc_…`) the key must name |
 | `AI_TIMEOUT_MS` | `20000` | Time budget for one AI call, including its retry and repair attempt |
 | `AI_MIN_CONFIDENCE` | `0.95` | Minimum model confidence for an automatic approval |
-| `ADMIN_PASSWORD` | required | Support dashboard password (12+ characters, not a placeholder or common password) |
-| `SEED_CUSTOMER_EMAIL` / `SEED_CUSTOMER_PASSWORD` | required | Demo customers' sign-in: `<local>+N@<domain>` for N = 1 to 15, one shared password (12+ characters) |
+| `ADMIN_PASSWORD` | `admin` | Support dashboard password |
+| `SEED_CUSTOMER_EMAIL` / `SEED_CUSTOMER_PASSWORD` | `nwisuanu@gmail.com` / `customer` | Demo customers' sign-in: `<local>+N@<domain>` for N = 1 to 15, one shared password |
 | `API_DOCS` | `false` | Serve the API reference at `/docs` |
 | `WEB_PORT` | `8080` | Port the app is published on |
 | `POSTGRES_USER` / `POSTGRES_DB` | `refund` / `refund_support` | Database name and user (the database is not published to the host) |
-| `POSTGRES_PASSWORD` | required | Database password (12+ characters) |
+| `POSTGRES_PASSWORD` | `refund_demo_password` | Database password |
 
 **Key detection.** `LLM_PROVIDER` wins, then `LLM_BASE_URL` (treated as OpenAI-compatible), then the key prefix:
 
@@ -91,7 +89,7 @@ An unrecognised key disables the AI with a logged reason instead of stopping sta
 
 ## Try the demo scenarios
 
-Fifteen customers are seeded, each with one to three orders and, where a scenario needs it, earlier refund history. Dates are relative to the moment of seeding, so every scenario keeps working. Customer N signs in as `<local>+N@<domain>` of `SEED_CUSTOMER_EMAIL` (for `you@example.com`, customer 1 is `you+1@example.com`) with `SEED_CUSTOMER_PASSWORD`; the order column shows which order the scenario is about, and the suggested message is a natural way to start the chat.
+Fifteen customers are seeded, each with one to three orders and, where a scenario needs it, earlier refund history. Dates are relative to the moment of seeding, so every scenario keeps working. Customer N signs in as `nwisuanu+N@gmail.com` with `customer` (or `<local>+N@<domain>` of your `SEED_CUSTOMER_EMAIL`, with `SEED_CUSTOMER_PASSWORD`); the order column shows which order the scenario is about, and the suggested message is a natural way to start the chat.
 
 | # | Customer, sign-in alias | Order | Say something like | Outcome |
 |---|---|---|---|---|
@@ -225,7 +223,7 @@ Each request records the policy version in force when it was submitted; retries 
 
 ## Security
 
-- **Secrets:** none in the code, the images or the UI. Passwords come only from `.env` (git-ignored); Compose stops if one is missing, and the API and seed refuse short, placeholder and well-known values. Error messages name the variable, never its value.
+- **Secrets:** none in the application code, the images or the UI. Passwords come from the environment: `.env` (git-ignored) or, for a local demo, the documented demo values in `docker-compose.yml`. The API and seed refuse to start if one is empty; error messages name the variable, never its value. The LLM key has no default.
 - **Passwords:** stored as scrypt hashes (N=2^15, r=8, p=3, a unique random salt each) and compared in constant time. An unknown email costs the same hash check, so the answer is always the same "Invalid credentials." and takes the same time. A hash made with weaker settings is replaced at the next sign-in. The admin password is hashed in memory at startup and never kept in plain text.
 - **Sessions:** server-side. The cookie holds a random 256-bit token; the database stores only its SHA-256 hash, so a copy of the database cannot be used to sign in. Signing out deletes the session on the server, so a saved copy of the cookie stops working. Cookies are `HttpOnly`, `SameSite=Strict`, `Secure` over HTTPS, and scoped (`/api` for customers, `/api/v1/admin` for the dashboard); the two kinds can never stand in for each other. A session ends after 30 minutes without use and 12 hours after sign-in at the latest; expired ones are purged by the background sweeper. After 5 failures an email is locked for 15 minutes, even for the right password.
 - **Ownership:** every customer resource (orders, conversations, requests) is looked up by owner; another customer's resource is a plain 404. Customer responses contain no rule IDs, traces, flags or AI data.

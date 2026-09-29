@@ -27,10 +27,8 @@ export interface SeedSummary {
 }
 
 /**
- * Upserts the demo customers, orders and items in one transaction.
- * Safe to run on every startup: existing rows are updated (dates refreshed relative to
- * `now` so every scenario keeps working), nothing is duplicated, and rows that are not
- * part of the demo catalog are never touched.
+ * Upserts the demo customers, orders and items in one transaction. Idempotent: existing rows are
+ * updated (dates refreshed relative to `now`) and rows outside the demo catalog are never touched.
  */
 export async function seedDemoCatalog(
   db: NodePgDatabase<typeof schema>,

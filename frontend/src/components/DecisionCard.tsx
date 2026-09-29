@@ -52,7 +52,6 @@ export function RequestOutcome({ request, currency, live = false, className = ''
   )
 }
 
-/** Each claimed item with its outcome. */
 function RequestLines({ lines, className = '' }: { lines: RefundRequestView['lines']; className?: string }) {
   return (
     <ul className={`space-y-1.5 ${className}`}>

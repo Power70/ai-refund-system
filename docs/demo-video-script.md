@@ -8,11 +8,11 @@ cp .env.example .env        # set LLM_API_KEY
 docker-compose up --build -d
 ```
 
-Keep two browser windows open: the customer app at <http://localhost:8080> and the dashboard at <http://localhost:8080/#/admin> (sign in with `ADMIN_PASSWORD` from `.env`). Customer N signs in as `<local>+N@<domain>` of `SEED_CUSTOMER_EMAIL`, with `SEED_CUSTOMER_PASSWORD`; N is the number in the README scenario table.
+Keep two browser windows open: the customer app at <http://localhost:8080> and the dashboard at <http://localhost:8080/#/admin> (password `admin`, or `ADMIN_PASSWORD` from `.env`). Customer N signs in as `nwisuanu+N@gmail.com` with the password `customer` (or the `SEED_CUSTOMER_*` values from `.env`); N is the number in the README scenario table.
 
 | Time | Show | Say |
 |---|---|---|
-| 0:00–0:20 | Terminal: `docker-compose up`, then the sign-in page | "One command starts the database, migrations with demo data, the API and the web app. No configuration is required; an AI key is optional." |
+| 0:00–0:20 | Terminal: `docker-compose up`, then the sign-in page | "One command starts the database, migrations with demo data, the API and the web app. Demo passwords are built in; an AI key is optional." |
 | 0:20–1:10 | **#1 Ada** (`+1`). Type "The shirt I got last week arrived torn". The assistant finds the Oxford shirt and shows the confirmation card. Submit. The decision card shows **Approved, $49.99**. Ask "why was it approved?" | "The customer writes in plain words. The AI works out the order, item and reason and pre-fills a claim, but nothing is decided until the customer confirms it. The policy decides, the AI only explains, and its answer is checked against the stored decision." |
 | 1:10–1:40 | **#7 Grace** (`+7`). Type "I changed my mind about one of the shirts". Tap the chip for the blue shirt, submit: **Approved, $80.00** | "When the message is ambiguous, the AI asks one question with tap-able answers instead of guessing." |
 | 1:40–2:00 | **#3 Chika** (`+3`). "I changed my mind about the leather belt": **Denied**, with the policy's reason | "Denials always come from the policy, worded from the policy, never invented by the model." |

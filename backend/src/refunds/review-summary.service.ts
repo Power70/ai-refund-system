@@ -45,10 +45,7 @@ export class ReviewSummaryService {
     private readonly llm: LlmService,
   ) {}
 
-  /**
-   * Stores the summary as an ADMIN_SUMMARY AI call. Skipped without a conversation or AI,
-   * and suppressed (recorded as SKIPPED) when injection was flagged. Idempotent per request; never throws.
-   */
+  /** Idempotent per request; never throws. Recorded as SKIPPED when injection was flagged. */
   async summarize(requestId: string): Promise<void> {
     try {
       if (!this.llm.enabled) return;
@@ -86,7 +83,7 @@ export class ReviewSummaryService {
     }
   }
 
-  /** The request, if it is an escalated chat claim that has no summary yet. */
+  /** Escalated chat claim without a summary yet, else null. */
   protected async findTarget(requestId: string): Promise<SummaryTarget | null> {
     const [row] = await this.db
       .select({ request: refundRequests, status: decisions.status, escalationReasons: decisions.escalationReasons })

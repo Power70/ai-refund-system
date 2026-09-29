@@ -16,7 +16,6 @@ export type ClaimAssessment =
   | {
       kind: 'AI';
       proposedReason: RefundReason;
-      /** Items that came up in the conversation (proposals, chips, orders panel). */
       discussedItemIds: readonly string[];
       /** Self-reported by the model: an extra condition only, never the sole one. */
       confidence: number;
@@ -28,7 +27,7 @@ export interface GateInput {
   confirmedReason: RefundReason;
   confirmedItemIds: readonly string[];
   assessment: ClaimAssessment;
-  /** This customer had a flagged conversation in the last 30 days. */
+  /** Flagged conversation in the last 30 days. */
   priorFlaggedConversation: boolean;
   minConfidence: number;
 }
@@ -43,19 +42,18 @@ export type GateReason =
   | 'ABUSIVE'
   | 'PRIOR_FLAGS'
   | 'LOW_CONFIDENCE'
-  /** The order is not in the policy's currency, so money thresholds cannot be compared (set by `planDecision`). */
+  /** Order currency differs from the policy's; set by `planDecision`. */
   | 'CURRENCY_MISMATCH';
 
 export interface GateResult {
   status: PolicyStatus;
-  /** Why an approval was held back for a person (empty when nothing changed). */
+  /** Why an approval was escalated; empty when unchanged. */
   reasons: GateReason[];
 }
 
 /**
- * The last check before an automatic approval. It can only turn APPROVED into ESCALATED:
- * DENIED and ESCALATED pass through untouched, and nothing here can ever produce an approval.
- * An approval stands only if every check passes; otherwise a person decides.
+ * Final check before an automatic approval. Can only turn APPROVED into ESCALATED;
+ * DENIED and ESCALATED pass through unchanged.
  */
 export function applySafetyGate(input: GateInput): GateResult {
   if (input.policyStatus !== 'APPROVED') return { status: input.policyStatus, reasons: [] };
@@ -80,7 +78,7 @@ export function applySafetyGate(input: GateInput): GateResult {
 
 export type HandoverReason = 'AI_DISABLED' | 'AI_FAILED' | 'TURN_LIMIT';
 
-/** Conversation state captured when the claim is submitted. */
+/** Conversation state captured at submission. */
 export interface ClaimContext {
   conversationId: string | null;
   handoverReason: HandoverReason | null;
@@ -90,10 +88,7 @@ export interface ClaimContext {
   priorFlaggedConversation: boolean;
 }
 
-/**
- * Derives the gate's view of the claim from the request row only, so the first attempt,
- * a retry and the sweeper reach the same decision.
- */
+/** Reads only the request row, so first attempt, retry and sweeper reach the same decision. */
 export function assessmentForRequest(request: Pick<typeof refundRequests.$inferSelect, 'claimContext' | 'aiProposal'>): ClaimAssessment {
   const context = request.claimContext;
   const proposal = request.aiProposal as ProposalRecord | null;
@@ -116,13 +111,7 @@ export function assessmentForRequest(request: Pick<typeof refundRequests.$inferS
 
 export type FinalLineStatus = 'REFUNDED' | 'NOT_REFUNDED' | 'UNDER_REVIEW';
 
-/**
- * What each line becomes once the final decision is stored:
- *  APPROVED  → ALLOW lines refunded, DENY lines not refunded;
- *  DENIED    → nothing refunded;
- *  ESCALATED → every line waits for a person (and stays reserved).
- * `finalStatus` is the status after the safety gate, which may hold back a policy approval.
- */
+/** `finalStatus` is the post-gate status; ESCALATED lines stay reserved (UNDER_REVIEW). */
 export function finalLineStatuses(
   evaluation: RequestEvaluation,
   finalStatus: PolicyStatus = evaluation.status,
@@ -153,20 +142,15 @@ export interface DecisionPlan {
   gate: GateResult;
   statuses: Map<string, FinalLineStatus>;
   approvedAmountMinor: number;
-  /** What the customer message is written from. */
   brief: DecisionBrief;
 }
 
-/**
- * Policy engine, then safety gate (or escalation when the order's currency differs from the
- * policy's), from stored inputs only: the first attempt, a retry and
- * the sweeper reach the same decision for the same request.
- */
+/** Policy engine then safety gate, from stored inputs only so every attempt reaches the same decision. */
 export function planDecision(input: DecisionInput): DecisionPlan {
   const { request, lines, policy } = input;
   const evaluation = evaluateRequest(policy.document, input.facts.lines, input.facts.history);
   const assessment = assessmentForRequest(request);
-  // Thresholds are in the policy's currency: any other currency goes to a person, whatever the outcome.
+  // Thresholds are in the policy's currency; any other currency is escalated.
   const gate: GateResult =
     input.currency === policy.document.currency
       ? applySafetyGate({

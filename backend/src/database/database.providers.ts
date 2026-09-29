@@ -42,9 +42,8 @@ export function createPgPool(connectionString: string): pg.Pool {
     statement_timeout: 10_000,
     application_name: 'ai-refund-api',
   });
-  // When the database drops an idle connection (restart, failover, network blip) the pool
-  // emits 'error'. Without a listener Node treats it as unhandled and crashes the process.
-  // The pool discards the broken client and opens a new one on the next query.
+  // A dropped idle connection emits 'error' on the pool; unhandled, it would crash the process.
+  // The pool replaces the broken client on the next query.
   pool.on('error', (error) => {
     logger.warn(`Idle database connection lost: ${error.message}`);
   });

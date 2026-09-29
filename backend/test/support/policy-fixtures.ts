@@ -6,7 +6,6 @@ import type { LineInput, RequestHistoryFacts } from '../../src/policy/policy-eng
 import { POLICY_OUTCOMES, REFUND_REASONS, type PolicyDocument } from '../../src/policy/policy-schema.js';
 import { PolicyService } from '../../src/policy/policy.service.js';
 
-/** The real policy/refund-policy.yaml. */
 export const REAL_POLICY_PATH = new URL('../../../policy/refund-policy.yaml', import.meta.url).pathname;
 
 /** A PolicyService outside Nest, reading the real policy file. */

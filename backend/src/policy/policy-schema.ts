@@ -1,7 +1,7 @@
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 
-/** Reasons a customer can give. Shared by the policy, the AI intake and the UI. */
+/** Shared by the policy, the AI intake and the UI. */
 export const REFUND_REASONS = [
   'DAMAGED',
   'WRONG_ITEM',
@@ -12,7 +12,7 @@ export const REFUND_REASONS = [
 
 export type RefundReason = (typeof REFUND_REASONS)[number];
 
-/** Customer-facing labels, used for quick replies and in the prompt. */
+/** Customer-facing; used for quick replies and in the prompt. */
 export const REASON_LABELS: Record<RefundReason, string> = {
   DAMAGED: 'It arrived damaged or defective',
   WRONG_ITEM: 'I received the wrong item',
@@ -21,11 +21,7 @@ export const REASON_LABELS: Record<RefundReason, string> = {
   OTHER: 'Something else',
 };
 
-/**
- * The only facts policy rules may reference. Adding a fact here (and to the fact
- * builder) is the one code change needed to support a new kind of rule.
- * "line" facts describe one requested item; "request" facts describe the whole request.
- */
+/** "line" facts describe one requested item; "request" facts the whole request. */
 export type FactScope = 'line' | 'request';
 export type FactType = 'boolean' | 'number' | 'string' | 'reason';
 
@@ -35,6 +31,7 @@ export interface FactDefinition {
   nullable: boolean;
 }
 
+/** The only facts rules may reference; a new fact must also be supplied by the fact builder. */
 export const FACT_VOCABULARY = {
   'item.delivered': { scope: 'line', type: 'boolean', nullable: false },
   'item.daysSinceDelivery': { scope: 'line', type: 'number', nullable: true },
@@ -61,7 +58,7 @@ export type ConditionOperator = (typeof CONDITION_OPERATORS)[number];
 
 export type ComparisonValue = boolean | number | string | ReadonlyArray<number | string>;
 
-/** Policy rules are immutable data: nothing may modify them after loading. */
+/** Rules are immutable after loading. */
 export interface FactCondition {
   fact: FactName;
   op: ConditionOperator;
@@ -86,11 +83,7 @@ const OPERATORS_BY_TYPE = {
   reason: ['eq', 'neq', 'in', 'notIn'],
 } as const satisfies Record<string, readonly ConditionOperator[]>;
 
-/**
- * Walks a structurally valid condition tree and reports semantic problems:
- * unknown facts, facts from the wrong scope, operators that don't fit the fact's
- * type, and values of the wrong type (including reasons the policy doesn't offer).
- */
+/** Semantic checks on a structurally valid condition: fact names, scope, operators and value types. */
 export function checkConditionTypes(
   node: unknown,
   scope: FactScope,
@@ -139,11 +132,7 @@ export function checkConditionTypes(
   return [];
 }
 
-/**
- * Semantic checks over the rule lists: duplicate ids and every condition's facts,
- * scopes, operators and values. Accepts unvalidated input on purpose, so these
- * problems are reported even when other parts of the file are also broken.
- */
+/** Accepts unvalidated input so rule issues are reported even when the rest of the file is broken. */
 export function collectRuleIssues(raw: unknown): ConditionIssue[] {
   if (typeof raw !== 'object' || raw === null) return [];
   const policy = raw as Record<string, unknown>;
@@ -201,12 +190,11 @@ const ruleSchema = z.strictObject({
   id: z.string().regex(/^[A-Z][A-Z0-9_]*$/, 'rule ids are UPPER_SNAKE_CASE'),
   when: conditionSchema,
   outcome: z.enum(POLICY_OUTCOMES),
-  // Shown to customers verbatim, so keep it short and free of template syntax.
+  // Shown to customers verbatim.
   publicReason: publicReasonSchema,
 });
 
-// Request rules can hold back or deny a whole request, never approve one:
-// a request-level ALLOW would read as "approve everything" and bypass item rules.
+// No request-level ALLOW: it would bypass item rules.
 const requestRuleSchema = ruleSchema.extend({
   outcome: z.enum(['DENY', 'REVIEW'], { error: 'request rules may only DENY or REVIEW' }),
 });
@@ -218,7 +206,7 @@ export const policyDocumentSchema = z
     currency: z.string().regex(/^[A-Z]{3}$/, 'ISO 4217 code, e.g. USD'),
     reviewEtaBusinessDays: z.number().int().min(0).max(30),
     precedence: z.tuple([z.enum(POLICY_OUTCOMES), z.enum(POLICY_OUTCOMES), z.enum(POLICY_OUTCOMES)]),
-    // Fail safe: a request no rule recognises goes to a human or is denied, never auto-approved.
+    // Fail safe: unmatched items are never auto-approved.
     defaultOutcome: z.enum(['REVIEW', 'DENY']),
     defaultPublicReason: publicReasonSchema,
     reasons: z.array(z.enum(REFUND_REASONS)).min(1),
@@ -240,7 +228,7 @@ export const policyDocumentSchema = z
 export type PolicyDocument = z.infer<typeof policyDocumentSchema>;
 export type PolicyRule = PolicyDocument['lineRules'][number];
 
-/** Thrown when a policy file is malformed. Carries every problem found, not just the first. */
+/** Carries every problem found, not just the first. */
 export class PolicyValidationError extends Error {
   constructor(readonly problems: string[]) {
     super(`Invalid refund policy:\n- ${problems.join('\n- ')}`);
@@ -248,14 +236,11 @@ export class PolicyValidationError extends Error {
   }
 }
 
-/**
- * Parses and fully validates policy YAML. Any problem is reported at load time
- * (application startup), never while a customer's request is being decided.
- */
+/** Full validation at load time, so no policy error can surface while deciding a request. */
 export function parsePolicy(yamlText: string): PolicyDocument {
   let raw: unknown;
   try {
-    // uniqueKeys: a duplicated key would otherwise silently override the first one.
+    // uniqueKeys: otherwise a duplicated key silently overrides the first.
     raw = parseYaml(yamlText, { uniqueKeys: true, prettyErrors: true });
   } catch (error) {
     throw new PolicyValidationError([`YAML syntax: ${(error as Error).message}`]);
@@ -265,8 +250,7 @@ export function parsePolicy(yamlText: string): PolicyDocument {
   if (!result.success) {
     const format = (path: PropertyKey[], message: string) => `${path.map(String).join('.') || '(root)'}: ${message}`;
     const problems = result.error.issues.map((issue) => format(issue.path, issue.message));
-    // The schema skips rule checks when the structure is broken; run them anyway
-    // so the author sees every problem in one pass.
+    // The schema skips rule checks on broken structure; run them to report everything at once.
     for (const issue of collectRuleIssues(raw)) {
       const line = format(issue.path, issue.message);
       if (!problems.includes(line)) problems.push(line);

@@ -16,7 +16,6 @@ import { StatusBadge } from '../StatusBadge'
 import { Button, focusRing, inputClass, Pager, pillClass } from '../ui'
 import { CaseBriefSheet } from './CaseBriefSheet'
 
-/** Dashboard data refreshes this often. */
 export const REFRESH_MS = 10_000
 export const PAGE_SIZE = 10
 const STATUSES: RequestStatus[] = ['APPROVED', 'DENIED', 'ESCALATED', 'PROCESSING']

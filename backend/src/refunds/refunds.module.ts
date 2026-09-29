@@ -12,7 +12,6 @@ import { RequestFactsService } from './request-facts.service.js';
 import { ReviewSummaryService } from './review-summary.service.js';
 import { SWEEPER_INTERVAL_MS, SweeperService } from './sweeper.service.js';
 
-/** Refund submission, automated decisions, recovery of stuck requests and customer messaging. */
 @Module({
   imports: [AuthModule, OrdersModule, PolicyModule],
   controllers: [RefundsController],

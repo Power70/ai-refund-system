@@ -12,7 +12,7 @@ const MIN_RETRY_BUDGET_MS = 1_000;
 const MAX_REPAIR_ISSUES = 5;
 
 export interface StructuredRequest<T> {
-  /** Tool name shown to the model, e.g. "record_turn". */
+  /** Tool name shown to the model. */
   name: string;
   description: string;
   system: string;

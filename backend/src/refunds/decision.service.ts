@@ -18,7 +18,6 @@ export interface Lease {
   leaseExpiresAt: Date;
 }
 
-/** A unique owner id per processing attempt, and when the lease runs out. */
 export function newLease(now = new Date()): Lease {
   return { leaseOwner: `${hostname()}:${process.pid}:${randomUUID()}`, leaseExpiresAt: new Date(now.getTime() + LEASE_MS) };
 }
@@ -27,9 +26,8 @@ type RefundRequestRow = typeof refundRequests.$inferSelect;
 type RequestLineRow = typeof refundRequestLines.$inferSelect;
 
 /**
- * Decides reserved requests and owns their processing lease. Every write that finishes a
- * request is conditional on the caller still holding the lease, so a worker that lost it
- * (expired and taken over by a retry or the sweeper) can never store a second decision.
+ * Decides reserved requests. Every finishing write is conditional on holding the lease,
+ * so a worker whose lease was taken over can never store a second decision.
  */
 @Injectable()
 export class DecisionService {
@@ -45,11 +43,7 @@ export class DecisionService {
     this.minConfidence = config.get('AI_MIN_CONFIDENCE', { infer: true });
   }
 
-  /**
-   * Decides a reserved request: facts (as of submission) → policy engine → safety gate →
-   * customer message, then stores the result (transaction 2). Returns false, writing nothing,
-   * when `leaseOwner` does not hold the lease.
-   */
+  /** Decides and stores a reserved request (transaction 2). Returns false, writing nothing, if the lease is lost. */
   async decide(requestId: string, leaseOwner: string): Promise<boolean> {
     const request = await this.leasedRequest(requestId, leaseOwner);
     if (!request) return false;
@@ -70,10 +64,7 @@ export class DecisionService {
     return this.record(request, leaseOwner, policy, plan, reply);
   }
 
-  /**
-   * Takes over a request whose lease expired with one compare-and-set UPDATE. When callers
-   * race (a retry and the sweeper), exactly one receives the new lease; the others get null.
-   */
+  /** Compare-and-set takeover of an expired lease: among racing callers exactly one gets the lease, others null. */
   async reclaimExpiredLease(requestId: string, now = new Date()): Promise<string | null> {
     const lease = newLease(now);
     const [row] = await this.db
@@ -86,10 +77,7 @@ export class DecisionService {
     return lease.leaseOwner;
   }
 
-  /**
-   * Hands a request to a person after repeated processing failures. The rules never ran, so
-   * there is no rule trace; every line stays reserved for the reviewer. Lease-guarded like `decide`.
-   */
+  /** Escalates after repeated processing failures (no rule trace; lines stay reserved). Lease-guarded. */
   async escalateAfterSystemFailure(requestId: string, leaseOwner: string, attempts: number): Promise<boolean> {
     const now = new Date();
     return this.db.transaction(async (tx) => {

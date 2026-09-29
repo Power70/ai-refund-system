@@ -20,9 +20,8 @@ export function customerTracker(req: Record<string, any>): string {
 }
 
 /**
- * Counts failures per key within a sliding time window. Used to lock a key (an email, an IP)
- * after too many failed attempts. In-memory: fine for one API instance; several instances
- * would share this via Redis.
+ * Counts failures per key (an email, an IP) in a sliding window, to lock the key after too many.
+ * In-memory: valid for a single API instance only.
  */
 export class SlidingFailureWindow {
   private readonly failures = new Map<string, number[]>();
@@ -55,7 +54,7 @@ const marked = (key: string) => (context: ExecutionContext): boolean => Reflect.
 /**
  * api: all routes, per IP. login-ip: sign-ins per IP. submit and chat: per customer.
  * Failed sign-ins per email and wrong admin tokens per IP are limited in AuthService.
- * In-memory storage suits a single instance; multiple instances would need shared storage (e.g. Redis).
+ * In-memory storage: multiple instances would need shared storage.
  */
 export const throttlerOptions: ThrottlerModuleOptions = {
   errorMessage: 'Too many requests. Please wait a moment and try again.',

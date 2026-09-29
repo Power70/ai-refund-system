@@ -40,7 +40,7 @@ export interface DemoHistoryEntry {
   expected: 'APPROVED' | 'DENIED' | 'ESCALATED';
 }
 
-/** `nwisuanu@gmail.com` + 3 → `nwisuanu+3@gmail.com`. The base comes from configuration, never from code. */
+/** Plus-addressed variant of `base`: `a@b.com` + 3 → `a+3@b.com`. The base comes from configuration. */
 export function demoEmail(base: string, alias: number): string {
   const at = base.lastIndexOf('@');
   return `${base.slice(0, at)}+${alias}${base.slice(at)}`.toLowerCase();

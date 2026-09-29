@@ -13,7 +13,6 @@ import { PolicyService } from './policy.service.js';
 export class PolicyController {
   constructor(private readonly policies: PolicyService) {}
 
-  /** The policy in force now. */
   @Get()
   @ApiOkResponse({ type: ActivePolicyDto })
   async active(): Promise<ActivePolicyDto> {

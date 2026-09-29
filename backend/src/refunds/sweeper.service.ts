@@ -15,20 +15,17 @@ export const MAX_ATTEMPTS = 3;
 const BATCH_SIZE = 20;
 
 export interface SweepResult {
-  /** Stuck requests found. */
   found: number;
-  /** Decided normally on this pass. */
   decided: number;
-  /** Handed to a person after too many failed attempts. */
+  /** Escalated after exceeding MAX_ATTEMPTS. */
   escalated: number;
   /** Failed again; retried once the new lease expires. */
   retryLater: number;
 }
 
 /**
- * Recovers requests left PROCESSING after their lease expired (worker crash, lost database,
- * failed decision). Each is taken over with the same compare-and-set as a customer retry, so
- * concurrent sweepers and retries never process one request twice.
+ * Recovers requests left PROCESSING after their lease expired. Takeover uses the same
+ * compare-and-set as a customer retry, so no request is processed twice concurrently.
  */
 @Injectable()
 export class SweeperService implements OnApplicationBootstrap, OnApplicationShutdown {
@@ -54,9 +51,8 @@ export class SweeperService implements OnApplicationBootstrap, OnApplicationShut
     await this.running; // let an in-flight pass finish before the pool closes
   }
 
-  /** Timer entry point: passes never overlap, and a failed pass is logged and retried next tick. Also removes expired sessions. */
+  /** Timer entry point; passes never overlap. Also purges expired sessions. */
   sweep(): Promise<SweepResult | null> {
-    // Each pass has its own correlation ID, so its audit records and log lines group together.
     this.running ??= runWithCorrelation(`sweep-${randomUUID()}`, async () => {
       await this.sessions.purgeExpired();
       return this.sweepOnce();
@@ -75,14 +71,14 @@ export class SweeperService implements OnApplicationBootstrap, OnApplicationShut
     return this.running;
   }
 
-  /** One pass. Attempts 2–3 re-run the normal decision; after that a person decides (SYSTEM_PROCESSING_FAILURE). */
+  /** Retries the normal decision up to MAX_ATTEMPTS, then escalates (SYSTEM_PROCESSING_FAILURE). */
   async sweepOnce(now = new Date()): Promise<SweepResult> {
     const stuck = await this.findStuck(now);
     const result: SweepResult = { found: stuck.length, decided: 0, escalated: 0, retryLater: 0 };
 
     for (const request of stuck) {
       const leaseOwner = await this.decisions.reclaimExpiredLease(request.id, now);
-      if (!leaseOwner) continue; // taken over by another caller first
+      if (!leaseOwner) continue; // reclaimed by another caller
 
       const attempts = request.attemptCount + 1;
       if (attempts > MAX_ATTEMPTS) {

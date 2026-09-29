@@ -1,7 +1,6 @@
 /**
- * Loads the demo data. Runs in the one-shot "migrate" service right after migrations:
- *   node dist/database/seed/run-seed.js
- * Order matters: catalog → register the refund policy → history decided under that policy.
+ * Loads the demo data; runs in the one-shot "migrate" service after migrations.
+ * Order matters: catalog, then the refund policy, then history decided under that policy.
  */
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { resolve } from 'node:path';

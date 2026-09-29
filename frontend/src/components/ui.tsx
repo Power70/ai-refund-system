@@ -31,7 +31,6 @@ export function Button({ variant = 'primary', icon: ButtonIcon, busy = false, cl
   )
 }
 
-/** Side panel with an icon heading. */
 export function Panel({ id, icon: PanelIcon, title, children }: { id: string; icon: Icon; title: string; children: ReactNode }) {
   return (
     <section aria-labelledby={id} className="rounded-2xl border border-slate-200 bg-white">
@@ -47,7 +46,6 @@ export function PanelMessage({ children }: { children: ReactNode }) {
   return <p className="px-4 py-6 text-sm text-slate-500">{children}</p>
 }
 
-/** A load failure with a way to try again. */
 export function LoadError({ children, onRetry }: { children: ReactNode; onRetry: () => void }) {
   return (
     <div role="alert" className="flex flex-wrap items-center justify-between gap-2 px-4 py-4 text-sm text-rose-700">
@@ -182,7 +180,6 @@ export function StatusDot({ tone, label, details }: { tone: keyof typeof DOT_TON
   )
 }
 
-/** "2 of 5" with Previous and Next. */
 export function Pager({ page, pages, onPage }: { page: number; pages: number; onPage: (page: number) => void }) {
   return (
     <nav aria-label="Pages" className="flex items-center justify-between gap-2 border-t border-slate-100 px-4 py-2 text-sm text-slate-600">

@@ -15,13 +15,13 @@ export interface RequestFactInput {
   orderId: string;
   reason: RefundReason;
   lines: readonly RequestedLine[];
-  /** The moment the request is judged at (its submission time). */
+  /** Evaluation time (the submission time). */
   at: Date;
-  /** The request being judged, excluded from its own history. */
+  /** Excluded from its own history. */
   excludeRequestId?: string;
 }
 
-/** A requested item doesn't belong to the order (or the order isn't the customer's). */
+/** Item not in the order, or the order is not the customer's. */
 export class ItemNotInOrderError extends Error {
   constructor(readonly orderItemIds: string[]) {
     super(`Items not found in this order: ${orderItemIds.join(', ')}`);
@@ -36,15 +36,13 @@ export interface RequestFacts {
   history: RequestHistoryFacts;
 }
 
-/** Loads the facts the policy engine evaluates a request against. */
 @Injectable()
 export class RequestFactsService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
   /**
-   * Reads everything the policy needs, as of `input.at`. Amounts come from what the customer
-   * paid, never from the client. Line ids are the order item ids. Pass a transaction as `db`
-   * to read consistently with locks taken by the caller.
+   * Facts as of `input.at`. Amounts come from the price paid, never the client. Pass a
+   * transaction as `db` to read under the caller's locks.
    */
   async build(input: RequestFactInput, db: Database = this.db): Promise<RequestFacts> {
     const itemIds = input.lines.map((l) => l.orderItemId);
@@ -65,7 +63,7 @@ export class RequestFactsService {
     const missing = itemIds.filter((id) => !byId.has(id));
     if (missing.length > 0) throw new ItemNotInOrderError(missing);
 
-    // Items with an earlier line that ended NOT_REFUNDED (automatic denial or a reviewer's "no").
+    // Denied earlier, automatically or by a reviewer.
     const deniedRows = await db
       .selectDistinct({ orderItemId: refundRequestLines.orderItemId })
       .from(refundRequestLines)
@@ -73,7 +71,7 @@ export class RequestFactsService {
       .where(and(inArray(refundRequestLines.orderItemId, itemIds), eq(refundRequestLines.finalLineStatus, 'NOT_REFUNDED'), lte(refundRequests.createdAt, input.at), notThisRequest));
     const previouslyDenied = new Set(deniedRows.map((r) => r.orderItemId));
 
-    // Money already refunded, awaiting a reviewer, or still being processed on this order.
+    // Refunded, under review or still processing on this order.
     const [{ refundedOrPending }] = await db
       .select({ refundedOrPending: sql<number>`coalesce(sum(${refundRequestLines.amountMinor}), 0)::int` })
       .from(refundRequestLines)

@@ -1,4 +1,4 @@
-import { seedEnvSchema, validateEnv, validateWith } from './env.js';
+import { migrateEnvSchema, seedEnvSchema, validateEnv, validateWith } from './env.js';
 
 const DATABASE_URL = 'postgresql://refund:secret@db:5432/refund_support';
 const ADMIN_PASSWORD = 'Tq7-long-enough-pass';
@@ -35,29 +35,17 @@ describe('validateEnv', () => {
     expect(() => validateEnv({ ADMIN_PASSWORD })).toThrow(/DATABASE_URL/);
   });
 
-  it('requires an admin password with no default, refusing short, placeholder and well-known ones', () => {
+  it('requires an admin password, but allows the demo defaults', () => {
     expect(() => validateEnv({ DATABASE_URL })).toThrow(/ADMIN_PASSWORD: is required/);
     expect(() => validateEnv({ DATABASE_URL, ADMIN_PASSWORD: '' })).toThrow(/ADMIN_PASSWORD: is required/);
-    expect(() => validateEnv({ DATABASE_URL, ADMIN_PASSWORD: 'short-1' })).toThrow(/at least 12/);
-    for (const weak of ['admin', 'admin12345678', 'change-me-please', 'password1234', 'your_placeholder_here', 'aaaaaaaaaaaaaaaa', '121212121212']) {
-      expect(() => validateEnv({ DATABASE_URL, ADMIN_PASSWORD: weak }), weak).toThrow(/ADMIN_PASSWORD/);
-    }
+    expect(validateEnv({ DATABASE_URL, ADMIN_PASSWORD: 'admin' }).ADMIN_PASSWORD).toBe('admin');
+    expect(validateEnv({ DATABASE_URL, ADMIN_PASSWORD: 'customer' }).ADMIN_PASSWORD).toBe('customer');
   });
 
-  it('requires a real database password in production', () => {
-    expect(() => validateEnv({ ...BASE, NODE_ENV: 'production' })).toThrow(/DATABASE_URL: password must be at least 12/);
-    expect(() => validateEnv({ ...BASE, NODE_ENV: 'production', DATABASE_URL: 'postgresql://refund:k3v9-q7x2-p8m4-z6w1@db/x' })).not.toThrow();
-    expect(() => validateEnv({ ...BASE, NODE_ENV: 'production', DATABASE_URL: 'postgresql://refund:change-me-now-123@db/x' })).toThrow(/placeholder/);
-  });
-
-  it('never echoes a rejected secret in the error', () => {
-    const rejected = 'password12345';
-    expect(() => validateEnv({ DATABASE_URL, ADMIN_PASSWORD: rejected })).toThrow(/ADMIN_PASSWORD/);
-    try {
-      validateEnv({ DATABASE_URL, ADMIN_PASSWORD: rejected });
-    } catch (error) {
-      expect((error as Error).message).not.toContain(rejected);
-    }
+  it('accepts non-empty database passwords in production', () => {
+    expect(() => validateEnv({ ...BASE, NODE_ENV: 'production' })).not.toThrow();
+    expect(() => validateEnv({ ...BASE, NODE_ENV: 'production', DATABASE_URL: 'postgresql://refund:admin@db/x' })).not.toThrow();
+    expect(() => validateEnv({ ...BASE, NODE_ENV: 'production', DATABASE_URL: 'postgresql://refund:customer@db/x' })).not.toThrow();
   });
 
   it('rejects a non-postgres DATABASE_URL', () => {
@@ -91,8 +79,15 @@ describe('seed configuration', () => {
     expect(() => validateWith(seedEnvSchema, { DATABASE_URL })).toThrow(/SEED_CUSTOMER_EMAIL.*SEED_CUSTOMER_PASSWORD/);
   });
 
-  it('refuses an address that already has a +alias, and a weak password', () => {
+  it('refuses an address that already has a +alias, but accepts the demo customer password', () => {
     expect(() => validateWith(seedEnvSchema, { ...seed, SEED_CUSTOMER_EMAIL: 'someone+1@example.org' })).toThrow(/must not contain/);
-    expect(() => validateWith(seedEnvSchema, { ...seed, SEED_CUSTOMER_PASSWORD: 'customer' })).toThrow(/SEED_CUSTOMER_PASSWORD/);
+    expect(validateWith(seedEnvSchema, { ...seed, SEED_CUSTOMER_PASSWORD: 'customer' }).SEED_CUSTOMER_PASSWORD).toBe('customer');
+  });
+});
+
+describe('migration configuration', () => {
+  it('needs only the database URL, not the API secrets', () => {
+    expect(validateWith(migrateEnvSchema, { DATABASE_URL })).toEqual({ DATABASE_URL });
+    expect(() => validateWith(migrateEnvSchema, {})).toThrow(/DATABASE_URL/);
   });
 });

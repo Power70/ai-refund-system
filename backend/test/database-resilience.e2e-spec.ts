@@ -49,7 +49,7 @@ describe('database outage while running (e2e)', () => {
     expect(killed).toBeGreaterThan(0);
     await new Promise((resolve) => setTimeout(resolve, 200));
 
-    // Before the pool error handler existed, this crashed the process.
+    // Without a pool error handler, the killed connections would crash the process.
     const started = Date.now();
     await request(server).get('/api/v1/health').expect(503, { status: 'degraded' });
     expect(Date.now() - started).toBeLessThan(3_000);

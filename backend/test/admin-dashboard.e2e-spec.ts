@@ -18,7 +18,7 @@ describe('admin dashboard API (e2e)', () => {
     testDb = await prepareDemoDatabase();
     app = await createTestApp(testDb.url);
 
-    // Real customer activity, oldest first: Grace (manual approval → person), Ben (denied), Femi (over $500).
+    // Customer activity, oldest first: manual review (Grace), denied (Ben), over $500 (Femi).
     const grace = await customerClient(app, 'customer+7@example.test');
     created.grace = (await grace.submit({ orderNumber: 'WN-4GK1VS', reason: 'CHANGED_MIND', lines: [{ itemId: grace.itemId('Linen shirt, blue'), quantity: 1 }] }).expect(201)).body.requestId;
     const ben = await customerClient(app, 'customer+2@example.test');

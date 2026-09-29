@@ -21,7 +21,6 @@ describe('refund request schema (e2e, real PostgreSQL)', () => {
   let db: Database;
   let policyVersionId: string;
 
-  // Two demo customers and their orders/items, looked up once.
   let ada: { id: string; orderId: string; itemId: string };
   let ben: { id: string; orderId: string; itemId: string };
 

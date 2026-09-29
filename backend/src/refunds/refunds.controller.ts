@@ -28,7 +28,7 @@ import { RefundsService } from './refunds.service.js';
 export class RefundsController {
   constructor(private readonly refunds: RefundsService) {}
 
-  /** Submits a confirmed claim. Status: 201 new, 200 replay of the same key, 202 still processing. */
+  /** 201 new, 200 replay of the same key, 202 still processing. */
   @Post()
   @SubmitRateLimit()
   @ApiHeader({ name: 'Idempotency-Key', required: true, description: 'One UUID per confirmation card; reuse it when retrying.' })

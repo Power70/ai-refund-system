@@ -25,14 +25,13 @@ export interface ResolvableLine {
 export interface DerivedResolution {
   outcome: ResolutionOutcome;
   approvedAmountMinor: number;
-  /** One decision per line, in the request's line order. */
+  /** In the request's line order. */
   lineDecisions: LineResolution[];
 }
 
 /**
- * Turns a reviewer's yes/no per line into the stored resolution. The reviewer never types
- * an amount: the outcome and total come from the approved lines, so money and quantities agree.
- * Returns null unless the decisions cover exactly the request's lines, each once.
+ * Amounts derive from the approved lines, never from reviewer input. Returns null unless the
+ * decisions cover exactly the request's lines, each once.
  */
 export function deriveResolution(lines: readonly ResolvableLine[], decisions: readonly LineResolution[]): DerivedResolution | null {
   const approveById = new Map(decisions.map((d) => [d.lineId, d.approve]));
@@ -45,16 +44,13 @@ export function deriveResolution(lines: readonly ResolvableLine[], decisions: re
   return { outcome, approvedAmountMinor: approved.reduce((sum, line) => sum + line.amountMinor, 0), lineDecisions };
 }
 
-/** A reviewer's final decision on an escalated request. */
 @Injectable()
 export class ResolutionService {
   constructor(@Inject(DATABASE) private readonly db: Database) {}
 
   /**
-   * Records a person's line-by-line decision in one transaction: the resolution, the new line
-   * statuses (approved → REFUNDED, rejected → NOT_REFUNDED, which frees the quantity) and an
-   * audit event. The automated decision is left untouched. The request row is locked first,
-   * so two reviewers can't both resolve the same case.
+   * One transaction; the automated decision is left untouched. NOT_REFUNDED frees the quantity.
+   * The request row is locked first so two reviewers cannot both resolve a case.
    */
   async resolve(publicId: string, input: ResolveEscalationDto, now = new Date()): Promise<void> {
     try {
@@ -109,7 +105,7 @@ export class ResolutionService {
             .set({ finalLineStatus: approve ? 'REFUNDED' : 'NOT_REFUNDED' })
             .where(and(inArray(refundRequestLines.id, ids), eq(refundRequestLines.finalLineStatus, 'UNDER_REVIEW')))
             .returning({ id: refundRequestLines.id });
-          // Every line of an escalated request is held UNDER_REVIEW; anything else is a broken invariant.
+          // Invariant: every line of an escalated request is UNDER_REVIEW.
           if (updated.length !== ids.length) throw new Error(`Request ${publicId}: expected ${ids.length} lines under review, found ${updated.length}`);
         }
 
@@ -121,7 +117,7 @@ export class ResolutionService {
           data: {
             outcome: resolution.outcome,
             approvedAmountMinor: resolution.approvedAmountMinor,
-            // Recorded so the trail shows when a person refunded a line the policy would have denied.
+            // policyOutcome exposes reviewer overrides of the policy in the audit trail.
             lines: lines.map((l) => ({ lineId: l.id, approve: approveById.get(l.id)!, policyOutcome: l.lineOutcome })),
           },
           createdAt: now,

@@ -85,11 +85,11 @@ export interface EarlierRequest {
   createdAt: Date;
   /** The customer-facing status: PROCESSING, ESCALATED, APPROVED, PARTIALLY_APPROVED or DENIED. */
   status: string;
-  /** outcome: REFUNDED, NOT_REFUNDED, UNDER_REVIEW or PROCESSING. */
+  /** Line outcome: REFUNDED, NOT_REFUNDED, UNDER_REVIEW or PROCESSING. */
   lines: { itemName: string; quantity: number; outcome: string }[];
   /** The policy's explanations the customer was given with an automatic decision. */
   reasons: string[];
-  /** A support person made the final decision. */
+  /** True when a support agent made the final decision. */
   reviewed: boolean;
 }
 
