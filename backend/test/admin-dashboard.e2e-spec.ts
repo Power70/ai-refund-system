@@ -3,7 +3,7 @@ import request from 'supertest';
 import { createTestApp } from './create-test-app.js';
 import { CSRF, customerClient, prepareDemoDatabase, type TestDatabase } from './support/test-app.js';
 
-const ADMIN = { Authorization: 'Bearer admin-demo-token' };
+const ADMIN = { Authorization: 'Bearer admin' };
 const QUEUE = '/api/v1/admin/refund-requests';
 
 interface Row { requestId: string; status: string; source: string; customerName: string; customerEmail: string; reasons: string[]; resolution: string | null; createdAt: string; requestedAmountMinor: number }
@@ -18,11 +18,11 @@ describe('admin dashboard API (e2e)', () => {
     app = await createTestApp(testDb.url);
 
     // Real customer activity, oldest first: Grace (manual approval → person), Ben (denied), Femi (over $500).
-    const grace = await customerClient(app, 'grace.lee@example.com', 'WN-4GK1VS');
+    const grace = await customerClient(app, 'grace.lee@example.com');
     created.grace = (await grace.submit({ orderNumber: 'WN-4GK1VS', reason: 'CHANGED_MIND', lines: [{ itemId: grace.itemId('Linen shirt, blue'), quantity: 1 }] }).expect(201)).body.requestId;
-    const ben = await customerClient(app, 'ben.carter@example.com', 'WN-Q4M1ZT');
+    const ben = await customerClient(app, 'ben.carter@example.com');
     created.ben = (await ben.submit({ orderNumber: 'WN-Q4M1ZT', reason: 'DAMAGED', lines: [{ itemId: ben.itemId('Desk lamp, black'), quantity: 1 }] }).expect(201)).body.requestId;
-    const femi = await customerClient(app, 'femi.johnson@example.com', 'WN-8NF4QA');
+    const femi = await customerClient(app, 'femi.johnson@example.com');
     created.femi = (await femi.submit({ orderNumber: 'WN-8NF4QA', reason: 'DAMAGED', lines: [{ itemId: femi.itemId('Standing desk mat, XL'), quantity: 1 }] }).expect(201)).body.requestId;
   });
 
@@ -36,13 +36,13 @@ describe('admin dashboard API (e2e)', () => {
   describe('access', () => {
     it('refuses a missing or wrong token, and says how to authenticate', async () => {
       await request(app.getHttpServer()).get(QUEUE).set('X-Forwarded-For', '192.0.2.1').expect(401);
-      const res = await request(app.getHttpServer()).get(QUEUE).set('X-Forwarded-For', '192.0.2.1').set('Authorization', 'Bearer admin-demo-tokeN').expect(401);
+      const res = await request(app.getHttpServer()).get(QUEUE).set('X-Forwarded-For', '192.0.2.1').set('Authorization', 'Bearer admiN').expect(401);
       expect(res.headers['www-authenticate']).toBe('Bearer');
-      await request(app.getHttpServer()).get(QUEUE).set('X-Forwarded-For', '192.0.2.1').set('Authorization', 'admin-demo-token').expect(401);
+      await request(app.getHttpServer()).get(QUEUE).set('X-Forwarded-For', '192.0.2.1').set('Authorization', 'admin').expect(401);
     });
 
     it("a customer's session cookie is not an admin credential", async () => {
-      const ada = await customerClient(app, 'ada.okafor@example.com', 'WN-7K3P9Q');
+      const ada = await customerClient(app, 'ada.okafor@example.com');
       await request(app.getHttpServer()).get(QUEUE).set('X-Forwarded-For', '192.0.2.2').set('Cookie', ada.cookie).expect(401);
     });
 
@@ -57,9 +57,9 @@ describe('admin dashboard API (e2e)', () => {
     it('exchanges the token for an httpOnly session cookie that survives a reload and ends on sign-out', async () => {
       const server = app.getHttpServer();
       const SESSION = '/api/v1/admin/session';
-      await request(server).post(SESSION).set('X-Forwarded-For', '192.0.2.5').send({ token: 'admin-demo-token' }).expect(403); // CSRF header required
-      await request(server).post(SESSION).set('X-Forwarded-For', '192.0.2.5').set(CSRF).send({ token: 'wrong-token-1234' }).expect(401);
-      const signedIn = await request(server).post(SESSION).set('X-Forwarded-For', '192.0.2.5').set(CSRF).send({ token: 'admin-demo-token' }).expect(200);
+      await request(server).post(SESSION).set('X-Forwarded-For', '192.0.2.5').send({ password: 'admin' }).expect(403); // CSRF header required
+      await request(server).post(SESSION).set('X-Forwarded-For', '192.0.2.5').set(CSRF).send({ password: 'wrong-password' }).expect(401);
+      const signedIn = await request(server).post(SESSION).set('X-Forwarded-For', '192.0.2.5').set(CSRF).send({ password: 'admin' }).expect(200);
 
       const setCookie = ([] as string[]).concat(signedIn.headers['set-cookie'] ?? []).find((c) => c.startsWith('rs_admin='))!;
       expect(setCookie).toMatch(/HttpOnly/);
@@ -77,7 +77,7 @@ describe('admin dashboard API (e2e)', () => {
     });
 
     it("never accepts a customer's session token as the admin cookie", async () => {
-      const ada = await customerClient(app, 'ada.okafor@example.com', 'WN-7K3P9Q');
+      const ada = await customerClient(app, 'ada.okafor@example.com');
       const token = ada.cookie.split('=').slice(1).join('=');
       await request(app.getHttpServer()).get(QUEUE).set('Cookie', `rs_admin=${token}`).expect(401);
     });
@@ -182,6 +182,46 @@ describe('admin dashboard API (e2e)', () => {
       await request(app.getHttpServer()).get(`${QUEUE}/rr_zzzzzzzzzzzz`).set(ADMIN).expect(404);
       await request(app.getHttpServer()).get(`${QUEUE}/../../health`).set(ADMIN).expect(404);
       await request(app.getHttpServer()).get(`${QUEUE}/${created.grace}`).set('X-Forwarded-For', '192.0.2.3').expect(401);
+    });
+  });
+
+  describe('customers', () => {
+    const CUSTOMERS = '/api/v1/admin/customers';
+    const get = (path = '') => request(app.getHttpServer()).get(`${CUSTOMERS}${path}`).set(ADMIN);
+
+    it('lists customers by name, 10 per page by default, with counts and totals', async () => {
+      const { body } = await get().expect(200);
+      expect(body).toMatchObject({ total: 15, page: 1, pageSize: 10 });
+      expect(body.items).toHaveLength(10);
+      const names = body.items.map((c: { name: string }) => c.name);
+      expect(names).toEqual([...names].sort((a: string, b: string) => a.localeCompare(b)));
+      const femi = (await get('?q=FEMI').expect(200)).body;
+      expect(femi.items).toEqual([
+        { customerId: expect.any(String), name: 'Femi Johnson', email: 'femi.johnson@example.com', orders: 1, requests: 2, openRequests: 1, refundedMinor: 30000 },
+      ]);
+      expect((await get('?q=kemi.adeyemi@').expect(200)).body.items.map((c: { name: string }) => c.name)).toEqual(['Kemi Adeyemi']);
+    });
+
+    it("shows one customer's orders, items, requests and totals, and never a password hash", async () => {
+      const { body: list } = await get('?q=femi').expect(200);
+      const { body } = await get(`/${list.items[0].customerId}`).expect(200);
+      expect(body.customer).toMatchObject({ name: 'Femi Johnson', email: 'femi.johnson@example.com' });
+      expect(body.orders).toHaveLength(1);
+      expect(body.orders[0]).toMatchObject({ orderNumber: 'WN-8NF4QA', currency: 'USD', refundedMinor: 30000 });
+      expect(body.orders[0].items).toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: 'Ergonomic office chair', refundedQuantity: 1, pendingQuantity: 0 }), expect.objectContaining({ name: 'Standing desk mat, XL', pendingQuantity: 1 })]),
+      );
+      expect(body.requests.map((r: { requestId: string }) => r.requestId)).toEqual([created.femi, 'rr_6fem0chr0001']);
+      expect(body.totals.refundedMinor).toBe(30000);
+      expect(JSON.stringify(body)).not.toMatch(/scrypt|password/i);
+    });
+
+    it('404s for an unknown customer, 400s for a malformed id, and needs the admin', async () => {
+      await get('/7b1c3f9e-2d4a-4c5b-8e6f-0a1b2c3d4e5f').expect(404);
+      await get('/not-a-uuid').expect(400);
+      await request(app.getHttpServer()).get(CUSTOMERS).set('X-Forwarded-For', '192.0.2.40').expect(401);
+      const ada = await customerClient(app, 'ada.okafor@example.com');
+      await request(app.getHttpServer()).get(CUSTOMERS).set('X-Forwarded-For', '192.0.2.41').set('Cookie', ada.cookie).expect(401);
     });
   });
 });

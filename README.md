@@ -29,8 +29,8 @@ Open <http://localhost:8080>. That is all: migrations and demo data load automat
 
 | | |
 |---|---|
-| Customer app | <http://localhost:8080> (sign in with a demo email and one of its order numbers, see [scenarios](#try-the-demo-scenarios)) |
-| Support dashboard | <http://localhost:8080/#/admin>, token `admin-demo-token` |
+| Customer app | <http://localhost:8080>: sign in with a demo email (see [scenarios](#try-the-demo-scenarios)) and the password `customer` |
+| Support dashboard | <http://localhost:8080/#/admin>, password `admin` |
 | API docs (Swagger) | <http://localhost:8080/docs> |
 
 To enable the AI, add any supported key before starting:
@@ -63,7 +63,7 @@ Every variable is optional; `.env.example` documents them all. Compose reads a `
 | `ANTHROPIC_WORKSPACE_ID` | empty | Anthropic organization-level keys only: the workspace (`wrkspc_…`) the key must name |
 | `AI_TIMEOUT_MS` | `20000` | Time budget for one AI call, including its retry and repair attempt |
 | `AI_MIN_CONFIDENCE` | `0.95` | Minimum model confidence for an automatic approval |
-| `ADMIN_TOKEN` | `admin-demo-token` | Dashboard bearer token (12+ characters); the API logs a warning while the demo token is in use |
+| `ADMIN_PASSWORD` | `admin` | Support dashboard password (5+ characters); the API logs a warning while the demo password is in use |
 | `SESSION_SECRET` | public demo value | Signs customer and dashboard session cookies (32+ characters); the API logs a warning while the demo value is in use |
 | `WEB_PORT` | `8080` | Port the app is published on |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | `refund` / `refund_demo_password` / `refund_support` | Database credentials (the database is not published to the host) |
@@ -82,7 +82,7 @@ An unrecognised key disables the AI with a logged reason instead of stopping sta
 
 ## Try the demo scenarios
 
-Fifteen customers are seeded, each with one to three orders and, where a scenario needs it, earlier refund history. Dates are relative to the moment of seeding, so every scenario keeps working. Sign in with the email and the order number shown; the suggested message is a natural way to start the chat.
+Fifteen customers are seeded, each with one to three orders and, where a scenario needs it, earlier refund history. Dates are relative to the moment of seeding, so every scenario keeps working. Every demo customer signs in with their email and the password `customer`; the order column shows which order the scenario is about, and the suggested message is a natural way to start the chat.
 
 | # | Customer (email) | Order | Say something like | Outcome |
 |---|---|---|---|---|
@@ -106,9 +106,9 @@ Approvals need the AI: an approval stands only when the AI's reading of the conv
 
 A timed walkthrough of these scenarios is in [`docs/demo-video-script.md`](docs/demo-video-script.md).
 
-After a decision, the chat keeps going: ask "why?" or "when will I get my money?" and it answers from the stored decision. The support dashboard shows every case with its transcript, the rules that fired, the AI's suggestion and an audit timeline; escalations are resolved item by item with a required note. A dot next to the dashboard title shows whether the AI is online, degraded or off. The queue shows 10 cases per page, with Previous and Next. Customers and reviewers use separate addresses with no link between them, both stay signed in across reloads, and a small "Trying to reconnect…" notice appears only while the service can't be reached.
+After a decision, the chat keeps going: ask "why?" or "when will I get my money?" and it answers from the stored decision. The support dashboard has two sections in a left-hand sidebar (a tab row on phones). **Refund requests** shows every case with its transcript, the rules that fired, the AI's suggestion and an audit timeline; escalations are resolved item by item with a required note. **Customers** is a searchable, read-only list of customers with their order and request counts and refunded totals; opening one shows every order with its items and what was refunded, and every refund request. A dot next to the dashboard title shows whether the AI is online, degraded or off. The queue shows 10 cases per page, with Previous and Next. Customers and reviewers use separate addresses with no link between them, both sign out from the top bar and stay signed in across reloads, and a small "Trying to reconnect…" notice appears only while the service can't be reached.
 
-Customers can open any order under **Your orders** to see its items, totals, what can still be claimed and the refund requests made for it. Each request under **My requests** opens with its latest outcome, including a reviewer's decision made after the page loaded. A request where only some items were refunded, by the policy or a reviewer, shows as **Partly approved** rather than *Approved*; the stored decision keeps the policy's status. The layout is mobile first: on a phone the workspace switches between **Chat**, **Orders** and **Requests** tabs, and the review queue shows each case as a card.
+**Your orders** lists each order's items with their prices; opening an order shows its dates, totals, what has been refunded and the refund requests made for it. Each request under **My requests** opens with its latest outcome, including a reviewer's decision made after the page loaded. A request where only some items were refunded, by the policy or a reviewer, shows as **Partly approved** rather than *Approved*; the stored decision keeps the policy's status. The layout is mobile first: on a phone the workspace switches between **Chat**, **Orders** and **Requests** tabs, and the review queue shows each case as a card.
 
 ## Architecture
 
@@ -127,7 +127,7 @@ Four Compose services: `db` (not published), `migrate` (runs SQL migrations and 
 
 | Module | Responsibility |
 |---|---|
-| `auth` | Customer sessions and the admin token: one service, a guard for each |
+| `auth` | Customer and admin sign-in and sessions: one service, a guard for each |
 | `orders` | The customer's orders with refundable, pending and refunded quantities |
 | `conversations` | The AI chat: turns, verification, hand-over to the form, follow-up questions |
 | `refunds` | Submission, the decision pipeline, the sweeper for stuck requests, customer messages, reviewer case notes |
@@ -216,9 +216,9 @@ Each request records the policy version in force when it was submitted; retries 
 
 ## Security
 
-- **Customer sessions:** sign in with an email and one of its order numbers. The session is an HMAC-signed, `HttpOnly`, `SameSite=Strict` cookie scoped to `/api`. It slides: it ends after 30 minutes without use and 12 hours after sign-in at the latest, so a page reload keeps the customer signed in. Wrong details always get the same 404; after 5 failures an email is locked for 15 minutes.
+- **Customer sign-in:** email and password. Passwords are stored as salted scrypt hashes, compared in constant time, and an unknown email costs the same hash check, so the answer is always the same "Invalid credentials." and takes the same time. The session is an HMAC-signed, `HttpOnly`, `SameSite=Strict` cookie scoped to `/api`. It slides: it ends after 30 minutes without use and 12 hours after sign-in at the latest, so a page reload keeps the customer signed in. After 5 failures an email is locked for 15 minutes, even for the right password.
 - **Ownership:** every customer resource (orders, conversations, requests) is looked up by owner; another customer's resource is a plain 404. Customer responses contain no rule IDs, traces, flags or AI data.
-- **Admin:** the token is compared in constant time; 10 wrong tokens lock the IP for 15 minutes. The dashboard exchanges it once for its own `HttpOnly` session cookie (a separate signing key, scoped to `/api/v1/admin`, same sliding lifetime), so page scripts never hold the token and a reload keeps the reviewer signed in. API clients can still send `Authorization: Bearer <token>`.
+- **Admin:** a single password (`ADMIN_PASSWORD`), compared in constant time; 10 wrong passwords lock the IP for 15 minutes. The dashboard exchanges it once for its own `HttpOnly` session cookie (a separate signing key, scoped to `/api/v1/admin`, same sliding lifetime), so page scripts never hold it and a reload keeps the reviewer signed in. API clients can send `Authorization: Bearer <password>`.
 - **CSRF:** every state-changing request needs `X-Requested-With: refund-app`, which a cross-site form cannot send; the API allows no cross-origin requests.
 - **Rate limits:** 120 requests/min per client, 10 sign-ins/min per IP, 20 chat messages/min and 5 submissions/min per customer; 10 conversations per customer per day, 12 AI turns per conversation and 10 follow-up questions per request bound AI cost.
 - **Input:** strict DTO validation (unknown fields rejected), 32 KB body limit, control characters stripped, database constraints behind the application checks (valid amounts, lease state, required reviewer note, append-only audit log enforced by triggers).
@@ -284,7 +284,7 @@ Stack: NestJS 12, TypeScript, Drizzle ORM, PostgreSQL 16, zod, Vitest; React 19,
 
 ## Assumptions and trade-offs
 
-- **Demo sign-in.** Proving one order number plus its email opens all of that email's orders. Production would use account login or a magic link.
+- **Demo sign-in.** All demo customers share the password `customer` and the dashboard uses one shared password, so reviewers can try every scenario. Production would give each customer their own password (the hashing already supports it) or a magic link, and each reviewer their own account with roles.
 - **The AI never decides.** Claims filled in on the form are always reviewed, so without a key nothing is refunded automatically. That is a deliberate cost of safety.
 - **Confidence is not calibration.** It only adds escalations; the default threshold is strict and can be tuned with `AI_MIN_CONFIDENCE`.
 - **Business calls encoded in the policy:** refunds over $500 on an order (cumulative, so splitting doesn't help), a fifth request within 30 days, a final-sale item claimed as damaged and an item denied before all go to a person.

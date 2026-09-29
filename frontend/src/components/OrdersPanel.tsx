@@ -1,6 +1,6 @@
 import { IconChevronRight, IconMessageCircleQuestion, IconPackage, IconTag } from '@tabler/icons-react'
 import type { Order, OrderItem } from '../api/client'
-import { formatDate, formatMoney, itemAvailability } from '../lib/format'
+import { formatDate, formatMoney } from '../lib/format'
 import { Button, focusRing, LoadError, Panel, PanelMessage } from './ui'
 
 interface OrdersPanelProps {
@@ -35,9 +35,7 @@ export function OrdersPanel({ orders, onAskAbout, onOpen, onRetry }: OrdersPanel
                 </span>
               </button>
               <ul className="mt-2 space-y-2">
-                {order.items.map((item) => {
-                  const status = itemAvailability(item)
-                  return (
+                {order.items.map((item) => (
                     <li key={item.id} className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-sm">
@@ -48,16 +46,15 @@ export function OrdersPanel({ orders, onAskAbout, onOpen, onRetry }: OrdersPanel
                             </span>
                           )}
                         </p>
-                        <p className={`text-xs ${status.className}`}>
-                          {formatMoney(item.unitPricePaidMinor, order.currency)} · {status.text}
+                        <p className="text-xs text-slate-500">
+                          {formatMoney(item.unitPricePaidMinor, order.currency)}
                         </p>
                       </div>
                       {onAskAbout && item.refundableQuantity > 0 && (
                         <Button variant="icon" icon={IconMessageCircleQuestion} onClick={() => onAskAbout(item)} aria-label={`Ask about ${item.name}`} className="shrink-0 text-indigo-600!" />
                       )}
                     </li>
-                  )
-                })}
+                ))}
               </ul>
             </li>
           ))}

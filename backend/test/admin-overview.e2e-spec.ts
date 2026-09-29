@@ -9,7 +9,7 @@ import * as schema from '../src/database/schema.js';
 import { createTestApp } from './create-test-app.js';
 import { customerClient, prepareDemoDatabase, strandedRequest, type TestDatabase } from './support/test-app.js';
 
-const ADMIN = { Authorization: 'Bearer admin-demo-token' };
+const ADMIN = { Authorization: 'Bearer admin' };
 
 describe('admin metrics and health (e2e)', () => {
   let testDb: TestDatabase;
@@ -71,11 +71,11 @@ describe('admin metrics and health (e2e)', () => {
 
   describe('after new activity and a crashed worker', () => {
     beforeAll(async () => {
-      const ben = await customerClient(app, 'ben.carter@example.com', 'WN-Q4M1ZT');
+      const ben = await customerClient(app, 'ben.carter@example.com');
       await ben.submit({ orderNumber: 'WN-Q4M1ZT', reason: 'DAMAGED', lines: [{ itemId: ben.itemId('Desk lamp, black'), quantity: 1 }] }).expect(201);
-      const femi = await customerClient(app, 'femi.johnson@example.com', 'WN-8NF4QA');
+      const femi = await customerClient(app, 'femi.johnson@example.com');
       await femi.submit({ orderNumber: 'WN-8NF4QA', reason: 'DAMAGED', lines: [{ itemId: femi.itemId('Standing desk mat, XL'), quantity: 1 }] }).expect(201);
-      const grace = await customerClient(app, 'grace.lee@example.com', 'WN-4GK1VS');
+      const grace = await customerClient(app, 'grace.lee@example.com');
       await grace.submit({ orderNumber: 'WN-4GK1VS', reason: 'CHANGED_MIND', lines: [{ itemId: grace.itemId('Linen shirt, blue'), quantity: 1 }] }).expect(201);
       await strandedRequest(db, { orderNumber: 'WN-2JC8WP', sku: 'TABLET-10-128', reason: 'DAMAGED', leaseExpiresAt: new Date(Date.now() - 1_000) });
     });

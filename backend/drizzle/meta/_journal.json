@@ -50,6 +50,13 @@
       "when": 1790547576988,
       "tag": "0006_link_requests_to_conversations",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1790674112910,
+      "tag": "0007_customer_passwords",
+      "breakpoints": true
     }
   ]
 }

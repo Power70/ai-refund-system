@@ -61,3 +61,13 @@ export function useApiHealth(): ApiHealthState {
   const { data, error } = usePolledData((signal) => api.health(signal), 'health', ({ data, error }) => (error || data === 'degraded' ? 3_000 : 15_000))
   return error ? 'unreachable' : (data ?? 'checking')
 }
+
+/** `value`, updated only after it has stopped changing for `delayMs` (e.g. search while typing). */
+export function useDebouncedValue<T>(value: T, delayMs = 300): T {
+  const [settled, setSettled] = useState(value)
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSettled(value), delayMs)
+    return () => window.clearTimeout(timer)
+  }, [value, delayMs])
+  return settled
+}

@@ -2,6 +2,7 @@ import { NotFoundException } from '@nestjs/common';
 import type { HealthService } from '../health/health.service.js';
 import { AdminController } from './admin.controller.js';
 import type { AdminService } from './admin.service.js';
+import type { AdminCustomersService } from './customers.service.js';
 import type { AdminQueueQueryDto, CaseBriefDto, ResolveEscalationDto } from './dto/admin.dto.js';
 import type { ResolutionService } from './resolution.service.js';
 
@@ -12,8 +13,9 @@ function setup() {
   const admin = { queue: vi.fn(), caseBrief: vi.fn(async () => brief as CaseBriefDto | null), metrics: vi.fn() };
   const resolutions = { resolve: vi.fn(async () => undefined) };
   const health = { detailed: vi.fn() };
-  const controller = new AdminController(admin as unknown as AdminService, resolutions as unknown as ResolutionService, health as unknown as HealthService);
-  return { admin, resolutions, health, controller };
+  const customers = { list: vi.fn(), detail: vi.fn(async () => null as unknown) };
+  const controller = new AdminController(admin as unknown as AdminService, resolutions as unknown as ResolutionService, health as unknown as HealthService, customers as unknown as AdminCustomersService);
+  return { admin, resolutions, health, customers, controller };
 }
 
 describe('AdminController', () => {
@@ -45,5 +47,12 @@ describe('AdminController', () => {
     await controller.detailedHealth();
     expect(admin.metrics).toHaveBeenCalled();
     expect(health.detailed).toHaveBeenCalled();
+  });
+
+  it('returns a customer, or 404s for an unknown one', async () => {
+    const { customers, controller } = setup();
+    await expect(controller.customer('7b1c3f9e-2d4a-4c5b-8e6f-0a1b2c3d4e5f')).rejects.toThrow(NotFoundException);
+    customers.detail.mockResolvedValue({ customer: { customerId: 'c' } });
+    await expect(controller.customer('7b1c3f9e-2d4a-4c5b-8e6f-0a1b2c3d4e5f')).resolves.toMatchObject({ customer: { customerId: 'c' } });
   });
 });

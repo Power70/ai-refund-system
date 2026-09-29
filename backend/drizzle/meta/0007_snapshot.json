@@ -1,0 +1,1702 @@
+{
+  "id": "a048f8dc-d960-4fa2-ae94-938d8b043964",
+  "prevId": "f5892a75-0991-4eb3-8303-1ab8618b956e",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.ai_calls": {
+      "name": "ai_calls",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "conversation_id": {
+          "name": "conversation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "kind": {
+          "name": "kind",
+          "type": "ai_call_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "ai_call_outcome",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "latency_ms": {
+          "name": "latency_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "validated_output": {
+          "name": "validated_output",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "failure_reason": {
+          "name": "failure_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "input_tokens": {
+          "name": "input_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "output_tokens": {
+          "name": "output_tokens",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ai_calls_conversation_idx": {
+          "name": "ai_calls_conversation_idx",
+          "columns": [
+            {
+              "expression": "conversation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ai_calls_request_idx": {
+          "name": "ai_calls_request_idx",
+          "columns": [
+            {
+              "expression": "request_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "ai_calls_conversation_id_conversations_id_fk": {
+          "name": "ai_calls_conversation_id_conversations_id_fk",
+          "tableFrom": "ai_calls",
+          "tableTo": "conversations",
+          "columnsFrom": [
+            "conversation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "ai_calls_request_id_refund_requests_id_fk": {
+          "name": "ai_calls_request_id_refund_requests_id_fk",
+          "tableFrom": "ai_calls",
+          "tableTo": "refund_requests",
+          "columnsFrom": [
+            "request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.audit_events": {
+      "name": "audit_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "type": {
+          "name": "type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor": {
+          "name": "actor",
+          "type": "audit_actor",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "data": {
+          "name": "data",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "correlation_id": {
+          "name": "correlation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "audit_events_request_created_idx": {
+          "name": "audit_events_request_created_idx",
+          "columns": [
+            {
+              "expression": "request_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "audit_events_request_id_refund_requests_id_fk": {
+          "name": "audit_events_request_id_refund_requests_id_fk",
+          "tableFrom": "audit_events",
+          "tableTo": "refund_requests",
+          "columnsFrom": [
+            "request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.conversation_messages": {
+      "name": "conversation_messages",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "conversation_id": {
+          "name": "conversation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "message_role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "typed": {
+          "name": "typed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "client_message_id": {
+          "name": "client_message_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "structured": {
+          "name": "structured",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "conversation_messages_conversation_created_idx": {
+          "name": "conversation_messages_conversation_created_idx",
+          "columns": [
+            {
+              "expression": "conversation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "conversation_messages_conversation_id_conversations_id_fk": {
+          "name": "conversation_messages_conversation_id_conversations_id_fk",
+          "tableFrom": "conversation_messages",
+          "tableTo": "conversations",
+          "columnsFrom": [
+            "conversation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "conversation_messages_client_message_unique": {
+          "name": "conversation_messages_client_message_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "conversation_id",
+            "client_message_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "conversation_messages_content_length": {
+          "name": "conversation_messages_content_length",
+          "value": "char_length(\"conversation_messages\".\"content\") BETWEEN 1 AND 1000"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.conversations": {
+      "name": "conversations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "customer_id": {
+          "name": "customer_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "state": {
+          "name": "state",
+          "type": "conversation_state",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'ACTIVE'"
+        },
+        "mode": {
+          "name": "mode",
+          "type": "conversation_mode",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "handover_reason": {
+          "name": "handover_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "turn_count": {
+          "name": "turn_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "failed_turns": {
+          "name": "failed_turns",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "latest_proposal": {
+          "name": "latest_proposal",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "discussed_item_ids": {
+          "name": "discussed_item_ids",
+          "type": "uuid[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::uuid[]"
+        },
+        "flags": {
+          "name": "flags",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{\"injectionAttempt\":false,\"mentionsOtherCustomerOrder\":false,\"abusive\":false,\"offTopic\":false}'::jsonb"
+        },
+        "pending_since": {
+          "name": "pending_since",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "conversations_customer_created_idx": {
+          "name": "conversations_customer_created_idx",
+          "columns": [
+            {
+              "expression": "customer_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "conversations_customer_id_customers_id_fk": {
+          "name": "conversations_customer_id_customers_id_fk",
+          "tableFrom": "conversations",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "customer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "conversations_counts_non_negative": {
+          "name": "conversations_counts_non_negative",
+          "value": "\"conversations\".\"turn_count\" >= 0 AND \"conversations\".\"failed_turns\" >= 0"
+        },
+        "conversations_handover_reason": {
+          "name": "conversations_handover_reason",
+          "value": "\"conversations\".\"handover_reason\" IS NULL OR \"conversations\".\"handover_reason\" IN ('AI_DISABLED', 'AI_FAILED', 'TURN_LIMIT')"
+        },
+        "conversations_manual_has_reason": {
+          "name": "conversations_manual_has_reason",
+          "value": "(\"conversations\".\"mode\" = 'MANUAL') = (\"conversations\".\"handover_reason\" IS NOT NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.customers": {
+      "name": "customers",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "password_hash": {
+          "name": "password_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "customers_email_unique": {
+          "name": "customers_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "customers_email_lowercase": {
+          "name": "customers_email_lowercase",
+          "value": "\"customers\".\"email\" = lower(\"customers\".\"email\")"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.decisions": {
+      "name": "decisions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "decision_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "approved_amount_minor": {
+          "name": "approved_amount_minor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "policy_version_id": {
+          "name": "policy_version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "rule_trace": {
+          "name": "rule_trace",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gate_result": {
+          "name": "gate_result",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "escalation_reasons": {
+          "name": "escalation_reasons",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
+        "customer_message": {
+          "name": "customer_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "message_source": {
+          "name": "message_source",
+          "type": "message_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "decisions_request_id_refund_requests_id_fk": {
+          "name": "decisions_request_id_refund_requests_id_fk",
+          "tableFrom": "decisions",
+          "tableTo": "refund_requests",
+          "columnsFrom": [
+            "request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "decisions_policy_version_id_policy_versions_id_fk": {
+          "name": "decisions_policy_version_id_policy_versions_id_fk",
+          "tableFrom": "decisions",
+          "tableTo": "policy_versions",
+          "columnsFrom": [
+            "policy_version_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "decisions_request_id_unique": {
+          "name": "decisions_request_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "request_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "decisions_amount_non_negative": {
+          "name": "decisions_amount_non_negative",
+          "value": "\"decisions\".\"approved_amount_minor\" >= 0"
+        },
+        "decisions_amount_only_when_approved": {
+          "name": "decisions_amount_only_when_approved",
+          "value": "\"decisions\".\"status\" = 'APPROVED' OR \"decisions\".\"approved_amount_minor\" = 0"
+        },
+        "decisions_escalation_has_reasons": {
+          "name": "decisions_escalation_has_reasons",
+          "value": "\"decisions\".\"status\" <> 'ESCALATED' OR cardinality(\"decisions\".\"escalation_reasons\") > 0"
+        },
+        "decisions_trace_or_system_failure": {
+          "name": "decisions_trace_or_system_failure",
+          "value": "\"decisions\".\"rule_trace\" IS NOT NULL OR (\"decisions\".\"status\" = 'ESCALATED' AND 'SYSTEM_PROCESSING_FAILURE' = ANY(\"decisions\".\"escalation_reasons\"))"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.order_items": {
+      "name": "order_items",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sku": {
+          "name": "sku",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "category": {
+          "name": "category",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unit_price_paid_minor": {
+          "name": "unit_price_paid_minor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "final_sale": {
+          "name": "final_sale",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        }
+      },
+      "indexes": {
+        "order_items_order_id_idx": {
+          "name": "order_items_order_id_idx",
+          "columns": [
+            {
+              "expression": "order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "order_items_order_id_sku_unique": {
+          "name": "order_items_order_id_sku_unique",
+          "columns": [
+            {
+              "expression": "order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sku",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "order_items_order_id_orders_id_fk": {
+          "name": "order_items_order_id_orders_id_fk",
+          "tableFrom": "order_items",
+          "tableTo": "orders",
+          "columnsFrom": [
+            "order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "order_items_id_order_id_unique": {
+          "name": "order_items_id_order_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "order_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "order_items_price_non_negative": {
+          "name": "order_items_price_non_negative",
+          "value": "\"order_items\".\"unit_price_paid_minor\" >= 0"
+        },
+        "order_items_quantity_positive": {
+          "name": "order_items_quantity_positive",
+          "value": "\"order_items\".\"quantity\" > 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.orders": {
+      "name": "orders",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "order_number": {
+          "name": "order_number",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "customer_id": {
+          "name": "customer_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "placed_at": {
+          "name": "placed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "delivered_at": {
+          "name": "delivered_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "currency": {
+          "name": "currency",
+          "type": "char(3)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "orders_customer_id_idx": {
+          "name": "orders_customer_id_idx",
+          "columns": [
+            {
+              "expression": "customer_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "orders_customer_id_customers_id_fk": {
+          "name": "orders_customer_id_customers_id_fk",
+          "tableFrom": "orders",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "customer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "orders_order_number_unique": {
+          "name": "orders_order_number_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "order_number"
+          ]
+        },
+        "orders_id_customer_id_unique": {
+          "name": "orders_id_customer_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "customer_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "orders_delivered_after_placed": {
+          "name": "orders_delivered_after_placed",
+          "value": "\"orders\".\"delivered_at\" IS NULL OR \"orders\".\"delivered_at\" >= \"orders\".\"placed_at\""
+        },
+        "orders_currency_upper": {
+          "name": "orders_currency_upper",
+          "value": "\"orders\".\"currency\" ~ '^[A-Z]{3}$'"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.policy_versions": {
+      "name": "policy_versions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "version": {
+          "name": "version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content_hash": {
+          "name": "content_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "content": {
+          "name": "content",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "effective_from": {
+          "name": "effective_from",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "policy_versions_version_unique": {
+          "name": "policy_versions_version_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "version"
+          ]
+        },
+        "policy_versions_content_hash_unique": {
+          "name": "policy_versions_content_hash_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "content_hash"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.refund_request_lines": {
+      "name": "refund_request_lines",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "order_item_id": {
+          "name": "order_item_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "quantity": {
+          "name": "quantity",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount_minor": {
+          "name": "amount_minor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "line_outcome": {
+          "name": "line_outcome",
+          "type": "policy_outcome",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "deciding_rule_id": {
+          "name": "deciding_rule_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "final_line_status": {
+          "name": "final_line_status",
+          "type": "line_status",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "refund_request_lines_order_item_idx": {
+          "name": "refund_request_lines_order_item_idx",
+          "columns": [
+            {
+              "expression": "order_item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "refund_request_lines_request_order_fk": {
+          "name": "refund_request_lines_request_order_fk",
+          "tableFrom": "refund_request_lines",
+          "tableTo": "refund_requests",
+          "columnsFrom": [
+            "request_id",
+            "order_id"
+          ],
+          "columnsTo": [
+            "id",
+            "order_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "refund_request_lines_item_order_fk": {
+          "name": "refund_request_lines_item_order_fk",
+          "tableFrom": "refund_request_lines",
+          "tableTo": "order_items",
+          "columnsFrom": [
+            "order_item_id",
+            "order_id"
+          ],
+          "columnsTo": [
+            "id",
+            "order_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "refund_request_lines_request_item_unique": {
+          "name": "refund_request_lines_request_item_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "request_id",
+            "order_item_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "refund_request_lines_quantity_positive": {
+          "name": "refund_request_lines_quantity_positive",
+          "value": "\"refund_request_lines\".\"quantity\" > 0"
+        },
+        "refund_request_lines_amount_non_negative": {
+          "name": "refund_request_lines_amount_non_negative",
+          "value": "\"refund_request_lines\".\"amount_minor\" >= 0"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.refund_requests": {
+      "name": "refund_requests",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "public_id": {
+          "name": "public_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "customer_id": {
+          "name": "customer_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "order_id": {
+          "name": "order_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "policy_version_id": {
+          "name": "policy_version_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload_hash": {
+          "name": "payload_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reason_confirmed": {
+          "name": "reason_confirmed",
+          "type": "refund_reason",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ai_proposal": {
+          "name": "ai_proposal",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "conversation_id": {
+          "name": "conversation_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claim_context": {
+          "name": "claim_context",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "reason_overridden": {
+          "name": "reason_overridden",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "source": {
+          "name": "source",
+          "type": "request_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'CUSTOMER'"
+        },
+        "state": {
+          "name": "state",
+          "type": "request_state",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'PROCESSING'"
+        },
+        "lease_owner": {
+          "name": "lease_owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lease_expires_at": {
+          "name": "lease_expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attempt_count": {
+          "name": "attempt_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "refund_requests_customer_created_idx": {
+          "name": "refund_requests_customer_created_idx",
+          "columns": [
+            {
+              "expression": "customer_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "refund_requests_order_id_idx": {
+          "name": "refund_requests_order_id_idx",
+          "columns": [
+            {
+              "expression": "order_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "refund_requests_processing_lease_idx": {
+          "name": "refund_requests_processing_lease_idx",
+          "columns": [
+            {
+              "expression": "lease_expires_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"refund_requests\".\"state\" = 'PROCESSING'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "refund_requests_policy_version_id_policy_versions_id_fk": {
+          "name": "refund_requests_policy_version_id_policy_versions_id_fk",
+          "tableFrom": "refund_requests",
+          "tableTo": "policy_versions",
+          "columnsFrom": [
+            "policy_version_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "refund_requests_conversation_id_conversations_id_fk": {
+          "name": "refund_requests_conversation_id_conversations_id_fk",
+          "tableFrom": "refund_requests",
+          "tableTo": "conversations",
+          "columnsFrom": [
+            "conversation_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "refund_requests_order_customer_fk": {
+          "name": "refund_requests_order_customer_fk",
+          "tableFrom": "refund_requests",
+          "tableTo": "orders",
+          "columnsFrom": [
+            "order_id",
+            "customer_id"
+          ],
+          "columnsTo": [
+            "id",
+            "customer_id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        },
+        "refund_requests_customer_fk": {
+          "name": "refund_requests_customer_fk",
+          "tableFrom": "refund_requests",
+          "tableTo": "customers",
+          "columnsFrom": [
+            "customer_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "refund_requests_public_id_unique": {
+          "name": "refund_requests_public_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "public_id"
+          ]
+        },
+        "refund_requests_conversation_id_unique": {
+          "name": "refund_requests_conversation_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "conversation_id"
+          ]
+        },
+        "refund_requests_customer_idempotency_unique": {
+          "name": "refund_requests_customer_idempotency_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "customer_id",
+            "idempotency_key"
+          ]
+        },
+        "refund_requests_id_order_id_unique": {
+          "name": "refund_requests_id_order_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "order_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "refund_requests_public_id_format": {
+          "name": "refund_requests_public_id_format",
+          "value": "\"refund_requests\".\"public_id\" ~ '^rr_[0-9a-hjkmnp-tv-z]{12}$'"
+        },
+        "refund_requests_idempotency_key_length": {
+          "name": "refund_requests_idempotency_key_length",
+          "value": "char_length(\"refund_requests\".\"idempotency_key\") BETWEEN 1 AND 100"
+        },
+        "refund_requests_payload_hash_format": {
+          "name": "refund_requests_payload_hash_format",
+          "value": "\"refund_requests\".\"payload_hash\" ~ '^[0-9a-f]{64}$'"
+        },
+        "refund_requests_attempts_positive": {
+          "name": "refund_requests_attempts_positive",
+          "value": "\"refund_requests\".\"attempt_count\" >= 1"
+        },
+        "refund_requests_lease_matches_state": {
+          "name": "refund_requests_lease_matches_state",
+          "value": "(\"refund_requests\".\"state\" = 'PROCESSING') = (\"refund_requests\".\"lease_owner\" IS NOT NULL AND \"refund_requests\".\"lease_expires_at\" IS NOT NULL)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.review_resolutions": {
+      "name": "review_resolutions",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "resolution_outcome",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "line_decisions": {
+          "name": "line_decisions",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "approved_amount_minor": {
+          "name": "approved_amount_minor",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reviewer_note": {
+          "name": "reviewer_note",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "customer_message": {
+          "name": "customer_message",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "review_resolutions_request_id_refund_requests_id_fk": {
+          "name": "review_resolutions_request_id_refund_requests_id_fk",
+          "tableFrom": "review_resolutions",
+          "tableTo": "refund_requests",
+          "columnsFrom": [
+            "request_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "review_resolutions_request_id_unique": {
+          "name": "review_resolutions_request_id_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "request_id"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "review_resolutions_amount_non_negative": {
+          "name": "review_resolutions_amount_non_negative",
+          "value": "\"review_resolutions\".\"approved_amount_minor\" >= 0"
+        },
+        "review_resolutions_denied_has_no_amount": {
+          "name": "review_resolutions_denied_has_no_amount",
+          "value": "\"review_resolutions\".\"outcome\" <> 'DENIED' OR \"review_resolutions\".\"approved_amount_minor\" = 0"
+        },
+        "review_resolutions_note_required": {
+          "name": "review_resolutions_note_required",
+          "value": "char_length(btrim(\"review_resolutions\".\"reviewer_note\")) >= 3"
+        }
+      },
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.ai_call_kind": {
+      "name": "ai_call_kind",
+      "schema": "public",
+      "values": [
+        "CHAT_TURN",
+        "DECISION_REPLY",
+        "FOLLOW_UP",
+        "ADMIN_SUMMARY"
+      ]
+    },
+    "public.ai_call_outcome": {
+      "name": "ai_call_outcome",
+      "schema": "public",
+      "values": [
+        "OK",
+        "INVALID",
+        "TIMEOUT",
+        "ERROR",
+        "SKIPPED"
+      ]
+    },
+    "public.audit_actor": {
+      "name": "audit_actor",
+      "schema": "public",
+      "values": [
+        "SYSTEM",
+        "AI",
+        "ADMIN",
+        "CUSTOMER"
+      ]
+    },
+    "public.conversation_mode": {
+      "name": "conversation_mode",
+      "schema": "public",
+      "values": [
+        "AI",
+        "MANUAL"
+      ]
+    },
+    "public.conversation_state": {
+      "name": "conversation_state",
+      "schema": "public",
+      "values": [
+        "ACTIVE",
+        "SUBMITTED",
+        "CLOSED"
+      ]
+    },
+    "public.decision_status": {
+      "name": "decision_status",
+      "schema": "public",
+      "values": [
+        "APPROVED",
+        "DENIED",
+        "ESCALATED"
+      ]
+    },
+    "public.line_status": {
+      "name": "line_status",
+      "schema": "public",
+      "values": [
+        "REFUNDED",
+        "NOT_REFUNDED",
+        "UNDER_REVIEW"
+      ]
+    },
+    "public.message_role": {
+      "name": "message_role",
+      "schema": "public",
+      "values": [
+        "CUSTOMER",
+        "ASSISTANT"
+      ]
+    },
+    "public.message_source": {
+      "name": "message_source",
+      "schema": "public",
+      "values": [
+        "AI",
+        "TEMPLATE"
+      ]
+    },
+    "public.policy_outcome": {
+      "name": "policy_outcome",
+      "schema": "public",
+      "values": [
+        "ALLOW",
+        "DENY",
+        "REVIEW"
+      ]
+    },
+    "public.refund_reason": {
+      "name": "refund_reason",
+      "schema": "public",
+      "values": [
+        "DAMAGED",
+        "WRONG_ITEM",
+        "NOT_AS_DESCRIBED",
+        "CHANGED_MIND",
+        "OTHER"
+      ]
+    },
+    "public.request_source": {
+      "name": "request_source",
+      "schema": "public",
+      "values": [
+        "CUSTOMER",
+        "SEED"
+      ]
+    },
+    "public.request_state": {
+      "name": "request_state",
+      "schema": "public",
+      "values": [
+        "PROCESSING",
+        "DECIDED"
+      ]
+    },
+    "public.resolution_outcome": {
+      "name": "resolution_outcome",
+      "schema": "public",
+      "values": [
+        "APPROVED",
+        "PARTIALLY_APPROVED",
+        "DENIED"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

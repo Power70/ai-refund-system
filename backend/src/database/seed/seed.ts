@@ -11,6 +11,7 @@ import { RequestFactsService } from '../../refunds/request-facts.service.js';
 import type { Database } from '../database.providers.js';
 import * as schema from '../schema.js';
 import { DEMO_CATALOG, demoOrderDates, DEMO_HISTORY, type DemoCustomer, type DemoHistoryEntry } from './demo-data.js';
+import { DEMO_CUSTOMER_PASSWORD, hashPassword } from '../../auth/passwords.js';
 
 export interface SeedSummary {
   customers: number;
@@ -31,12 +32,15 @@ export async function seedDemoCatalog(
 ): Promise<SeedSummary> {
   const summary: SeedSummary = { customers: 0, orders: 0, items: 0 };
 
+  // One hash (one salt) for the shared demo password keeps seeding fast; real accounts get their own.
+  const passwordHash = await hashPassword(DEMO_CUSTOMER_PASSWORD);
+
   await db.transaction(async (tx) => {
     for (const demo of catalog) {
       const [customer] = await tx
         .insert(schema.customers)
-        .values({ name: demo.name, email: demo.email.toLowerCase() })
-        .onConflictDoUpdate({ target: schema.customers.email, set: { name: demo.name } })
+        .values({ name: demo.name, email: demo.email.toLowerCase(), passwordHash })
+        .onConflictDoUpdate({ target: schema.customers.email, set: { name: demo.name, passwordHash } })
         .returning({ id: schema.customers.id });
       summary.customers++;
 

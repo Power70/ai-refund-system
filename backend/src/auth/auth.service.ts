@@ -1,14 +1,15 @@
-import { HttpException, HttpStatus, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
+import { HttpException, HttpStatus, Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { eq } from 'drizzle-orm';
 import { firstNameOf } from '../common/format.js';
 import type { SlidingFailureWindow } from '../common/rate-limit.js';
 import { DATABASE, type Database } from '../database/database.providers.js';
-import { customers, orders } from '../database/schema.js';
-import { ADMIN_FAILURES, ADMIN_TOKEN, LOGIN_FAILURES, SESSION_SECRET } from './auth.providers.js';
+import { customers } from '../database/schema.js';
+import { ADMIN_FAILURES, ADMIN_PASSWORD, LOGIN_FAILURES, SESSION_SECRET } from './auth.providers.js';
+import { DUMMY_PASSWORD_HASH, verifyPassword } from './passwords.js';
 import { constantTimeEquals, issueSession, renewSession, verifySessionToken, type IssuedToken } from './session-token.js';
 
 /** Same message for every sign-in failure, so responses never reveal which part was wrong. */
-export const SIGN_IN_FAILED = "We couldn't find an order with those details.";
+export const SIGN_IN_FAILED = 'Invalid credentials.';
 export const TOO_MANY_ATTEMPTS = 'Too many requests. Please wait a moment and try again.';
 
 export interface IssuedSession {
@@ -29,31 +30,33 @@ export interface VerifiedSession {
 
 const ADMIN_SUBJECT = 'admin';
 
-/** Customer sessions (email + order number), admin sessions and admin token checks. */
+/** Customer sessions (email + password), admin sessions and the admin password check. */
 @Injectable()
 export class AuthService {
   constructor(
     @Inject(DATABASE) private readonly db: Database,
     @Inject(SESSION_SECRET) private readonly sessionSecret: string,
-    @Inject(ADMIN_TOKEN) private readonly adminToken: string,
+    @Inject(ADMIN_PASSWORD) private readonly adminPassword: string,
     @Inject(LOGIN_FAILURES) private readonly loginFailures: SlidingFailureWindow,
     @Inject(ADMIN_FAILURES) private readonly adminFailures: SlidingFailureWindow,
   ) {}
 
   /**
-   * Proves ownership with email + order number. Only failures count towards the per-email lock,
-   * and a locked email is refused even with correct details, so a guesser can't confirm a hit.
+   * Email + password. Only failures count towards the per-email lock, and a locked email is
+   * refused even with the right password, so a guesser can't confirm a hit.
    */
-  async signIn(email: string, orderNumber: string, now = new Date()): Promise<IssuedSession> {
+  async signIn(email: string, password: string, now = new Date()): Promise<IssuedSession> {
     if (this.loginFailures.isLocked(email, now.getTime())) throw new HttpException(TOO_MANY_ATTEMPTS, HttpStatus.TOO_MANY_REQUESTS);
 
-    const match = await this.findCustomerByOrder(email, orderNumber);
-    if (!match) {
+    const customer = await this.findCustomerByEmail(email);
+    // An unknown email still costs one hash check, so timing doesn't reveal which part was wrong.
+    const valid = await verifyPassword(password, customer?.passwordHash ?? DUMMY_PASSWORD_HASH);
+    if (!customer || !customer.passwordHash || !valid) {
       this.loginFailures.recordFailure(email, now.getTime());
-      throw new NotFoundException(SIGN_IN_FAILED);
+      throw new UnauthorizedException(SIGN_IN_FAILED);
     }
 
-    return { ...issueSession(match.id, this.secretFor('customer'), now), firstName: firstNameOf(match.name) };
+    return { ...issueSession(customer.id, this.secretFor('customer'), now), firstName: firstNameOf(customer.name) };
   }
 
   /** Customer id for a valid, unexpired session token, otherwise null. */
@@ -70,9 +73,9 @@ export class AuthService {
     return { sub: payload.sub, renewed: renewSession(payload, secret, now) };
   }
 
-  /** Exchanges the admin token for a session cookie, under the same per-IP lock as the header. */
-  startAdminSession(adminToken: string, ip: string, now = new Date()): { result: AdminCheck; session: IssuedToken | null } {
-    const result = this.checkAdmin(`Bearer ${adminToken}`, ip);
+  /** Exchanges the admin password for a session cookie, under the same per-IP lock as the header. */
+  startAdminSession(password: string, ip: string, now = new Date()): { result: AdminCheck; session: IssuedToken | null } {
+    const result = this.checkAdmin(`Bearer ${password}`, ip);
     return { result, session: result === 'ok' ? issueSession(ADMIN_SUBJECT, this.secretFor('admin'), now) : null };
   }
 
@@ -81,11 +84,11 @@ export class AuthService {
     return customer ? { firstName: firstNameOf(customer.name) } : null;
   }
 
-  /** Checks an `Authorization` header against ADMIN_TOKEN; wrong tokens lock the IP for a while. */
+  /** Checks an `Authorization: Bearer <password>` header against ADMIN_PASSWORD; wrong ones lock the IP for a while. */
   checkAdmin(authorization: string | undefined, ip: string): AdminCheck {
     if (this.adminFailures.isLocked(ip)) return 'locked';
     const presented = authorization?.startsWith('Bearer ') ? authorization.slice('Bearer '.length) : '';
-    if (presented && constantTimeEquals(presented, this.adminToken)) return 'ok';
+    if (presented && constantTimeEquals(presented, this.adminPassword)) return 'ok';
     this.adminFailures.recordFailure(ip);
     return 'invalid';
   }
@@ -95,14 +98,12 @@ export class AuthService {
     return kind === 'admin' ? `${this.sessionSecret}:admin` : this.sessionSecret;
   }
 
-  /** One query whichever part is wrong, so timing doesn't reveal which. */
-  protected async findCustomerByOrder(email: string, orderNumber: string): Promise<{ id: string; name: string } | undefined> {
-    const [match] = await this.db
-      .select({ id: customers.id, name: customers.name })
-      .from(orders)
-      .innerJoin(customers, eq(customers.id, orders.customerId))
-      .where(and(eq(customers.email, email), eq(orders.orderNumber, orderNumber)))
+  protected async findCustomerByEmail(email: string): Promise<{ id: string; name: string; passwordHash: string | null } | undefined> {
+    const [customer] = await this.db
+      .select({ id: customers.id, name: customers.name, passwordHash: customers.passwordHash })
+      .from(customers)
+      .where(eq(customers.email, email))
       .limit(1);
-    return match;
+    return customer;
   }
 }

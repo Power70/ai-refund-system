@@ -1,6 +1,6 @@
 import { http, HttpResponse, type JsonBodyType } from 'msw'
 import { setupServer } from 'msw/node'
-import type { AdminMetrics, CaseBrief, Conversation, Order, QueueRow, RefundRequestView } from '../src/api/client'
+import type { AdminMetrics, CaseBrief, Conversation, CustomerDetail, CustomerRow, Order, QueueRow, RefundRequestView } from '../src/api/client'
 
 /** Mock API; tests add handlers with `server.use`. */
 export const server = setupServer()
@@ -126,4 +126,37 @@ export const caseBrief: CaseBrief = {
   aiSummarySuppressed: false,
   aiCalls: [],
   audit: [],
+}
+
+export const customerRow: CustomerRow = {
+  customerId: '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b',
+  name: 'Femi Johnson',
+  email: 'femi.johnson@example.com',
+  orders: 1,
+  requests: 2,
+  openRequests: 1,
+  refundedMinor: 30000,
+}
+
+export const customerDetail: CustomerDetail = {
+  customer: { customerId: customerRow.customerId, name: 'Femi Johnson', email: 'femi.johnson@example.com', createdAt: '2026-09-01T10:00:00Z' },
+  orders: [
+    {
+      orderNumber: 'WN-8NF4QA',
+      placedAt: '2026-09-18T10:00:00Z',
+      deliveredAt: '2026-09-21T10:00:00Z',
+      currency: 'USD',
+      totalMinor: 58000,
+      refundedMinor: 30000,
+      items: [
+        { name: 'Ergonomic office chair', sku: 'CHAIR', quantity: 1, unitPricePaidMinor: 30000, finalSale: false, refundedQuantity: 1, pendingQuantity: 0 },
+        { name: 'Standing desk mat, XL', sku: 'MAT', quantity: 1, unitPricePaidMinor: 28000, finalSale: false, refundedQuantity: 0, pendingQuantity: 1 },
+      ],
+    },
+  ],
+  requests: [
+    { requestId: 'rr_femi0mat0001', orderNumber: 'WN-8NF4QA', createdAt: '2026-09-28T10:00:00Z', reason: 'DAMAGED', status: 'ESCALATED', resolution: null, requestedAmountMinor: 28000, approvedAmountMinor: 0 },
+    { requestId: 'rr_6fem0chr0001', orderNumber: 'WN-8NF4QA', createdAt: '2026-09-22T10:00:00Z', reason: 'DAMAGED', status: 'APPROVED', resolution: null, requestedAmountMinor: 30000, approvedAmountMinor: 30000 },
+  ],
+  totals: { orderedMinor: 58000, refundedMinor: 30000 },
 }

@@ -1,7 +1,7 @@
-import { IconAlertTriangle, IconForms, IconHistory, IconLogout, IconMessages, IconPackage, IconPlus, IconX, type Icon } from '@tabler/icons-react'
+import { IconAlertTriangle, IconForms, IconHistory, IconMessages, IconPackage, IconPlus, IconX, type Icon } from '@tabler/icons-react'
 import { useCallback, useEffect, useState } from 'react'
 import { api, type Order, type OrderItem, type QuickReply, type RefundRequestView } from '../api/client'
-import { storeId, useSupportChat } from '../hooks/useSupportChat'
+import { useSupportChat } from '../hooks/useSupportChat'
 import { ChatComposer } from './ChatComposer'
 import { ChatThread } from './ChatThread'
 import { ClaimCard } from './ClaimCard'
@@ -22,10 +22,9 @@ const TABS: { id: Tab; label: string; icon: Icon }[] = [
 
 interface SupportWorkspaceProps {
   firstName: string
-  onSignedOut: () => void
 }
 
-export function SupportWorkspace({ firstName, onSignedOut }: SupportWorkspaceProps) {
+export function SupportWorkspace({ firstName }: SupportWorkspaceProps) {
   const [orders, setOrders] = useState<Order[] | null>(null)
   const [requests, setRequests] = useState<RefundRequestView[] | null>(null)
   const [manualOpen, setManualOpen] = useState(false)
@@ -94,12 +93,6 @@ export function SupportWorkspace({ firstName, onSignedOut }: SupportWorkspacePro
     void chat.startNew()
   }
 
-  const signOut = async () => {
-    await api.signOut().catch(() => undefined)
-    storeId(null)
-    onSignedOut()
-  }
-
   const composer = !conversation
     ? null
     : conversation.state === 'SUBMITTED'
@@ -155,7 +148,6 @@ export function SupportWorkspace({ firstName, onSignedOut }: SupportWorkspacePro
             <Button variant="ghost" icon={IconPlus} onClick={startNew} aria-label="New request" title="New request">
               <span className="hidden sm:inline">New request</span>
             </Button>
-            <Button variant="icon" icon={IconLogout} onClick={() => void signOut()} aria-label="Sign out" />
           </div>
         </div>
 

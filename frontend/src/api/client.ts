@@ -136,7 +136,7 @@ export const api = {
     }
   },
 
-  signIn: (email: string, orderNumber: string) => request<{ firstName: string }>('POST', '/customer/session', { body: { email, orderNumber } }),
+  signIn: (email: string, password: string) => request<{ firstName: string }>('POST', '/customer/session', { body: { email, password } }),
   currentSession: () => request<{ firstName: string }>('GET', '/customer/session'),
   signOut: () => request<void>('DELETE', '/customer/session'),
 
@@ -261,10 +261,52 @@ export interface CaseBrief {
   audit: { type: string; actor: string; data: unknown; correlationId: string | null; at: string }[]
 }
 
+export interface CustomerRow {
+  customerId: string
+  name: string
+  email: string
+  orders: number
+  requests: number
+  /** Still processing or waiting for a reviewer. */
+  openRequests: number
+  refundedMinor: number
+}
+
+export interface CustomerDetail {
+  customer: { customerId: string; name: string; email: string; createdAt: string }
+  orders: {
+    orderNumber: string
+    placedAt: string
+    deliveredAt: string | null
+    currency: string
+    totalMinor: number
+    refundedMinor: number
+    items: { name: string; sku: string; quantity: number; unitPricePaidMinor: number; finalSale: boolean; refundedQuantity: number; pendingQuantity: number }[]
+  }[]
+  requests: {
+    requestId: string
+    orderNumber: string
+    createdAt: string
+    reason: RefundReason
+    status: RequestStatus
+    resolution: ResolutionOutcome | null
+    requestedAmountMinor: number
+    approvedAmountMinor: number
+  }[]
+  totals: { orderedMinor: number; refundedMinor: number }
+}
+
+export interface Page<T> {
+  items: T[]
+  total: number
+  page: number
+  pageSize: number
+}
+
 /** Dashboard API. Authenticated by the httpOnly admin session cookie, which page scripts can't read. */
 export const adminApi = {
-  /** Exchanges the admin token for the session cookie. */
-  signIn: (token: string) => request<{ expiresAt: string }>('POST', '/admin/session', { body: { token } }),
+  /** Exchanges the admin password for the session cookie. */
+  signIn: (password: string) => request<{ expiresAt: string }>('POST', '/admin/session', { body: { password } }),
   /** Resolves when a session exists (used to restore it after a reload). */
   currentSession: () => request<void>('GET', '/admin/session'),
   signOut: () => request<void>('DELETE', '/admin/session'),
@@ -274,8 +316,14 @@ export const adminApi = {
     const params = new URLSearchParams({ view: query.view, page: String(query.page), pageSize: String(query.pageSize) })
     if (query.status) params.set('status', query.status)
     if (query.q) params.set('q', query.q)
-    return request<{ items: QueueRow[]; total: number; page: number; pageSize: number }>('GET', `/admin/refund-requests?${params}`)
+    return request<Page<QueueRow>>('GET', `/admin/refund-requests?${params}`)
   },
+  customers: (query: { q?: string; page: number; pageSize: number }) => {
+    const params = new URLSearchParams({ page: String(query.page), pageSize: String(query.pageSize) })
+    if (query.q) params.set('q', query.q)
+    return request<Page<CustomerRow>>('GET', `/admin/customers?${params}`)
+  },
+  customer: (customerId: string) => request<CustomerDetail>('GET', `/admin/customers/${customerId}`),
   caseBrief: (requestId: string) => request<CaseBrief>('GET', `/admin/refund-requests/${requestId}`),
   resolve: (requestId: string, lineDecisions: { lineId: string; approve: boolean }[], reviewerNote: string) =>
     request<CaseBrief>('POST', `/admin/refund-requests/${requestId}/resolution`, { body: { lineDecisions, reviewerNote } }),

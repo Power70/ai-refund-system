@@ -12,7 +12,7 @@ describe('validateEnv', () => {
       AI_MIN_CONFIDENCE: 0.95,
       SWEEPER_INTERVAL_MS: 30_000,
       SUBMIT_WAIT_MS: 3_000,
-      ADMIN_TOKEN: 'admin-demo-token',
+      ADMIN_PASSWORD: 'admin',
       AI_TIMEOUT_MS: 20_000,
     });
   });

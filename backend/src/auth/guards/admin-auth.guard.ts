@@ -4,8 +4,8 @@ import { AuthService, TOO_MANY_ATTEMPTS } from '../auth.service.js';
 import { ADMIN_COOKIE_PATH, ADMIN_SESSION_COOKIE, sessionCookieOptions } from '../session-token.js';
 
 /**
- * Support dashboard access: `Authorization: Bearer <ADMIN_TOKEN>` (API clients), or the httpOnly
- * session cookie the dashboard receives in exchange for the token. Cookie requests are covered by
+ * Support dashboard access: `Authorization: Bearer <ADMIN_PASSWORD>` (API clients), or the httpOnly
+ * session cookie the dashboard receives in exchange for the password. Cookie requests are covered by
  * SameSite=Strict and the global X-Requested-With check. Demo-grade; production would use SSO/RBAC.
  */
 @Injectable()
@@ -29,6 +29,6 @@ export class AdminAuthGuard implements CanActivate {
     if (result === 'ok') return true;
     if (result === 'locked') throw new HttpException(TOO_MANY_ATTEMPTS, HttpStatus.TOO_MANY_REQUESTS);
     res.setHeader('WWW-Authenticate', 'Bearer');
-    throw new UnauthorizedException('A valid admin token is required.');
+    throw new UnauthorizedException('Invalid credentials.');
   }
 }

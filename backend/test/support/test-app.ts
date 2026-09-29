@@ -95,8 +95,11 @@ export function asVisitor(): { 'X-Forwarded-For': string } {
 }
 
 /** Signs in and returns the session cookie header value ("rs_session=..."). */
-export async function signIn(app: NestExpressApplication, email: string, orderNumber: string): Promise<string> {
-  const res = await request(app.getHttpServer()).post('/api/v1/customer/session').set(CSRF).set(asVisitor()).send({ email, orderNumber }).expect(200);
+/** Every seeded customer's password. */
+export const CUSTOMER_PASSWORD = 'customer';
+
+export async function signIn(app: NestExpressApplication, email: string): Promise<string> {
+  const res = await request(app.getHttpServer()).post('/api/v1/customer/session').set(CSRF).set(asVisitor()).send({ email, password: CUSTOMER_PASSWORD }).expect(200);
   const cookie = ([] as string[]).concat(res.headers['set-cookie'] ?? []).find((c) => c.startsWith('rs_session='));
   if (!cookie) throw new Error('no session cookie');
   return cookie.split(';')[0];
@@ -105,8 +108,8 @@ export async function signIn(app: NestExpressApplication, email: string, orderNu
 interface OrderItem { id: string; name: string; refundableQuantity: number }
 
 /** A signed-in customer: find item ids by name and submit claims like the frontend will. */
-export async function customerClient(app: NestExpressApplication, email: string, orderNumber: string) {
-  const cookie = await signIn(app, email, orderNumber);
+export async function customerClient(app: NestExpressApplication, email: string) {
+  const cookie = await signIn(app, email);
   const server = app.getHttpServer();
   const orders = (await request(server).get('/api/v1/customer/orders').set('Cookie', cookie).expect(200)).body.orders as { orderNumber: string; items: OrderItem[] }[];
 

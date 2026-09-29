@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsEmail, IsString, Length, Matches } from 'class-validator';
+import { IsEmail, IsString, Length } from 'class-validator';
 
 export class StartSessionDto {
   @ApiProperty({ example: 'ada.okafor@example.com' })
@@ -9,11 +9,10 @@ export class StartSessionDto {
   @Length(3, 254)
   email: string;
 
-  @ApiProperty({ example: 'WN-7K3P9Q' })
-  @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value))
+  @ApiProperty({ example: 'customer' })
   @IsString()
-  @Matches(/^WN-[A-Z0-9]{6}$/, { message: 'orderNumber looks like WN-7K3P9Q' })
-  orderNumber: string;
+  @Length(1, 200)
+  password: string;
 }
 
 export class SessionResponseDto {
@@ -30,10 +29,10 @@ export class CurrentCustomerDto {
 }
 
 export class StartAdminSessionDto {
-  @ApiProperty({ example: 'admin-demo-token' })
+  @ApiProperty({ example: 'admin' })
   @IsString()
-  @Length(12, 200)
-  token: string;
+  @Length(1, 200)
+  password: string;
 }
 
 export class AdminSessionResponseDto {

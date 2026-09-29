@@ -16,7 +16,7 @@ describe('AuthController', () => {
     const { auth, res, controller } = setup();
     auth.signIn.mockResolvedValue({ token: 'tok', firstName: 'Ada', expiresAt: new Date('2026-09-27T12:30:00Z') });
 
-    await expect(controller.signIn({ email: 'ada@example.com', orderNumber: 'WN-7K3P9Q' }, req(true), res)).resolves.toEqual({
+    await expect(controller.signIn({ email: 'ada@example.com', password: 'customer' }, req(true), res)).resolves.toEqual({
       firstName: 'Ada',
       expiresAt: '2026-09-27T12:30:00.000Z',
     });

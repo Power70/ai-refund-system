@@ -38,7 +38,7 @@ describe('refund submission (e2e)', () => {
   }
 
   it('#2 Ben: denied by policy (outside the window), with the policy reason', async () => {
-    const ben = await customerClient(app, 'ben.carter@example.com', 'WN-Q4M1ZT');
+    const ben = await customerClient(app, 'ben.carter@example.com');
     const res = await ben.submit({ orderNumber: 'WN-Q4M1ZT', reason: 'DAMAGED', lines: [{ itemId: ben.itemId('Desk lamp, black'), quantity: 1 }] }).expect(201);
     expect(res.body).toMatchObject({ status: 'DENIED', approvedAmountMinor: 0, orderNumber: 'WN-Q4M1ZT', lines: [{ itemName: 'Desk lamp, black', quantity: 1, outcome: 'NOT_REFUNDED' }] });
     expect(res.body.customerMessage).toContain('Refunds are available within 30 days of delivery.');
@@ -46,7 +46,7 @@ describe('refund submission (e2e)', () => {
   });
 
   it('#7 Grace: a manual claim the policy would approve goes to a person (no AI assessment yet)', async () => {
-    const grace = await customerClient(app, 'grace.lee@example.com', 'WN-4GK1VS');
+    const grace = await customerClient(app, 'grace.lee@example.com');
     const body = { orderNumber: 'WN-4GK1VS', reason: 'CHANGED_MIND', lines: [{ itemId: grace.itemId('Linen shirt, blue'), quantity: 1 }] };
     const key = crypto.randomUUID();
     const res = await grace.submit(body, key).set('X-Request-Id', 'edge-req-000001').expect(201);
@@ -83,7 +83,7 @@ describe('refund submission (e2e)', () => {
       .returning();
     await db.insert(schema.orderItems).values({ orderId: order.id, sku: 'EU-LAMP-1', name: 'Table lamp', category: 'HOME', unitPricePaidMinor: 4500, quantity: 1, finalSale: false });
 
-    const client = await customerClient(app, 'femi.johnson@example.com', 'WN-EUR45D');
+    const client = await customerClient(app, 'femi.johnson@example.com');
     const res = await client.submit({ orderNumber: 'WN-EUR45D', reason: 'DAMAGED', lines: [{ itemId: client.itemId('Table lamp'), quantity: 1 }] }).expect(201);
     expect(res.body).toMatchObject({ status: 'ESCALATED', approvedAmountMinor: 0, lines: [{ outcome: 'UNDER_REVIEW' }] });
 
@@ -94,7 +94,7 @@ describe('refund submission (e2e)', () => {
   });
 
   it('never exposes internal decision data to the customer', async () => {
-    const hassan = await customerClient(app, 'hassan.bello@example.com', 'WN-Z2T5HM');
+    const hassan = await customerClient(app, 'hassan.bello@example.com');
     const res = await hassan.submit({ orderNumber: 'WN-Z2T5HM', reason: 'DAMAGED', lines: [{ itemId: hassan.itemId('Over-ear headphones'), quantity: 1 }] }).expect(201);
     expect(Object.keys(res.body).sort()).toEqual(['approvedAmountMinor', 'createdAt', 'customerMessage', 'lines', 'orderNumber', 'requestId', 'status']);
     const text = JSON.stringify(res.body);
@@ -102,7 +102,7 @@ describe('refund submission (e2e)', () => {
   });
 
   it('#15 Obi: nothing left to refund, and more than was bought', async () => {
-    const obi = await customerClient(app, 'obi.chukwu@example.com', 'WN-H9F3LX');
+    const obi = await customerClient(app, 'obi.chukwu@example.com');
     const kettle = await obi.submit({ orderNumber: 'WN-H9F3LX', reason: 'DAMAGED', lines: [{ itemId: obi.itemId('Electric kettle, 1 L'), quantity: 1 }] }).expect(422);
     expect(kettle.body.code).toBe('NOTHING_LEFT_TO_REFUND');
     const toaster = await obi.submit({ orderNumber: 'WN-6TZ5DN', reason: 'DAMAGED', lines: [{ itemId: obi.itemId('Toaster, 2-slice'), quantity: 2 }] }).expect(422);
@@ -110,7 +110,7 @@ describe('refund submission (e2e)', () => {
   });
 
   it("refuses another customer's item or an unknown order with the same 404", async () => {
-    const ada = await customerClient(app, 'ada.okafor@example.com', 'WN-7K3P9Q');
+    const ada = await customerClient(app, 'ada.okafor@example.com');
     const bensLamp = (await demoOrder(db, 'WN-Q4M1ZT', ['LAMP-DSK-BLK'])).itemIds[0];
     const theirs = await ada.submit({ orderNumber: 'WN-Q4M1ZT', reason: 'DAMAGED', lines: [{ itemId: bensLamp, quantity: 1 }] }).expect(404);
     const mixed = await ada.submit({ orderNumber: 'WN-7K3P9Q', reason: 'DAMAGED', lines: [{ itemId: bensLamp, quantity: 1 }] }).expect(404);
@@ -119,7 +119,7 @@ describe('refund submission (e2e)', () => {
   });
 
   it('validates the claim and the Idempotency-Key', async () => {
-    const chika = await customerClient(app, 'chika.eze@example.com', 'WN-9TB6RW');
+    const chika = await customerClient(app, 'chika.eze@example.com');
     const belt = chika.itemId('Leather belt, brown (clearance)');
     const ok = { orderNumber: 'WN-9TB6RW', reason: 'CHANGED_MIND', lines: [{ itemId: belt, quantity: 1 }] };
     expect((await chika.submit(ok, null).expect(400)).body.code).toBe('IDEMPOTENCY_KEY_REQUIRED');
@@ -127,12 +127,12 @@ describe('refund submission (e2e)', () => {
     await chika.submit({ ...ok, lines: [] }).expect(400);
     await chika.submit({ ...ok, lines: [{ itemId: belt, quantity: 1 }, { itemId: belt, quantity: 1 }] }).expect(400);
     await chika.submit({ ...ok, reason: 'VIP' }).expect(400);
-    const daniel = await customerClient(app, 'daniel.mensah@example.com', 'WN-X8D3KF');
+    const daniel = await customerClient(app, 'daniel.mensah@example.com');
     await daniel.submit({ orderNumber: 'WN-X8D3KF', reason: 'DAMAGED', lines: [{ itemId: daniel.itemId('Denim jacket (final sale)'), quantity: 1, amountMinor: 1 }] }).expect(400);
   });
 
   it('two simultaneous submissions for the same item: exactly one reserves it', async () => {
-    const kemi = await customerClient(app, 'kemi.adeyemi@example.com', 'WN-3VH9TL');
+    const kemi = await customerClient(app, 'kemi.adeyemi@example.com');
     const body = { orderNumber: 'WN-3VH9TL', reason: 'CHANGED_MIND', lines: [{ itemId: kemi.itemId('Polo shirt, green'), quantity: 1 }] };
     const results = await Promise.all([kemi.submit(body), kemi.submit(body)]);
     expect(results.map((r) => r.status).sort((a, b) => a - b)).toEqual([201, 409]);
@@ -140,7 +140,7 @@ describe('refund submission (e2e)', () => {
   });
 
   it('simultaneous retries with the same key create one request', async () => {
-    const lara = await customerClient(app, 'lara.smith@example.com', 'WN-7XW2QD');
+    const lara = await customerClient(app, 'lara.smith@example.com');
     const body = { orderNumber: 'WN-7XW2QD', reason: 'DAMAGED', lines: [{ itemId: lara.itemId('Steel water bottle, 750 ml'), quantity: 1 }] };
     const key = crypto.randomUUID();
     const results = await Promise.all([lara.submit(body, key), lara.submit(body, key), lara.submit(body, key)]);
@@ -167,7 +167,7 @@ describe('refund submission (e2e)', () => {
     }
 
     it('is finished by a retry once its lease has expired', async () => {
-      const musa = await customerClient(app, 'musa.ibrahim@example.com', 'WN-B4N6ZR');
+      const musa = await customerClient(app, 'musa.ibrahim@example.com');
       const body = { orderNumber: 'WN-B4N6ZR', reason: 'DAMAGED', lines: [{ itemId: musa.itemId('Backpack, grey'), quantity: 1 }] };
       const key = crypto.randomUUID();
       const row = await strandedRequest('WN-B4N6ZR', 'BAG-BPK-GRY', body, key, new Date(Date.now() - 1_000));
@@ -180,7 +180,7 @@ describe('refund submission (e2e)', () => {
     });
 
     it('answers 202 "still processing" while the lease is still valid', async () => {
-      const musa = await customerClient(app, 'musa.ibrahim@example.com', 'WN-B4N6ZR');
+      const musa = await customerClient(app, 'musa.ibrahim@example.com');
       const body = { orderNumber: 'WN-5QE1MK', reason: 'DAMAGED', lines: [{ itemId: musa.itemId('Baseball cap, black'), quantity: 1 }] };
       const key = crypto.randomUUID();
       await strandedRequest('WN-5QE1MK', 'CAP-BSB-BLK', body, key, new Date(Date.now() + 60_000));
@@ -190,14 +190,14 @@ describe('refund submission (e2e)', () => {
   });
 
   it('lets a customer read their own requests, and only theirs', async () => {
-    const ngozi = await customerClient(app, 'ngozi.obi@example.com', 'WN-2JC8WP');
+    const ngozi = await customerClient(app, 'ngozi.obi@example.com');
     const created = await ngozi.submit({ orderNumber: 'WN-2JC8WP', reason: 'DAMAGED', lines: [{ itemId: ngozi.itemId('Tablet 10", 128 GB'), quantity: 1 }] }).expect(201);
     const one = await ngozi.get(`/${created.body.requestId}`).expect(200);
     expect(one.body).toEqual(created.body);
     const list = await ngozi.get().expect(200);
     expect(list.body.map((r: { requestId: string }) => r.requestId)).toContain(created.body.requestId);
 
-    const efe = await customerClient(app, 'efe.adebayo@example.com', 'WN-L6W9PH');
+    const efe = await customerClient(app, 'efe.adebayo@example.com');
     await efe.get(`/${created.body.requestId}`).expect(404);
     await efe.get('/not-an-id').expect(404);
     expect((await efe.get().expect(200)).body).toEqual([]);
@@ -205,7 +205,7 @@ describe('refund submission (e2e)', () => {
 
   it('requires a session and the anti-CSRF header', async () => {
     await request(app.getHttpServer()).post('/api/v1/customer/refund-requests').set(CSRF).send({}).expect(401);
-    const ifeoma = await customerClient(app, 'ifeoma.nwosu@example.com', 'WN-6PQ8XE');
+    const ifeoma = await customerClient(app, 'ifeoma.nwosu@example.com');
     await request(app.getHttpServer()).post('/api/v1/customer/refund-requests').set('Cookie', ifeoma.cookie).send({}).expect(403);
   });
 
@@ -214,7 +214,7 @@ describe('refund submission (e2e)', () => {
     llm.decisionMessageDelayMs = 400;
     const slowApp = await createTestApp(testDb.url, { llm, submitWaitMs: 50 });
     try {
-      const ben = await customerClient(slowApp, 'ben.carter@example.com', 'WN-Q4M1ZT');
+      const ben = await customerClient(slowApp, 'ben.carter@example.com');
       // A second, distinct claim for Ben: the first test already claimed the lamp.
       const [lamp] = await db.select().from(schema.orderItems).where(eq(schema.orderItems.name, 'Desk lamp, black'));
       await db.update(schema.orderItems).set({ quantity: lamp.quantity + 1 }).where(eq(schema.orderItems.id, lamp.id));
@@ -255,10 +255,10 @@ describe('submission rate limit (e2e)', () => {
   });
 
   it('allows 5 submissions a minute per customer, then 429; other customers are unaffected', async () => {
-    const jide = await customerClient(app, 'jide.afolabi@example.com', 'WN-K5R2BW');
+    const jide = await customerClient(app, 'jide.afolabi@example.com');
     for (let i = 0; i < 5; i++) await jide.submit({ orderNumber: 'WN-K5R2BW', reason: 'DAMAGED', lines: [] }).expect(400);
     await jide.submit({ orderNumber: 'WN-K5R2BW', reason: 'DAMAGED', lines: [] }).expect(429);
-    const ada = await customerClient(app, 'ada.okafor@example.com', 'WN-7K3P9Q');
+    const ada = await customerClient(app, 'ada.okafor@example.com');
     await ada.submit({ orderNumber: 'WN-7K3P9Q', reason: 'DAMAGED', lines: [] }).expect(400);
   });
 });

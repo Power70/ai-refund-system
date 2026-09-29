@@ -25,6 +25,8 @@ export const customers = pgTable(
     name: text('name').notNull(),
     // Stored lower-cased so lookups and uniqueness are case-insensitive.
     email: text('email').notNull().unique(),
+    // Salted scrypt hash (see auth/passwords.ts). Null: the customer cannot sign in.
+    passwordHash: text('password_hash'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [check('customers_email_lowercase', sql`${t.email} = lower(${t.email})`)],

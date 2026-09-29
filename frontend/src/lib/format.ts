@@ -1,5 +1,3 @@
-import type { OrderItem } from '../api/client'
-
 export function formatMoney(amountMinor: number, currency = 'USD'): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(amountMinor / 100)
 }
@@ -23,9 +21,7 @@ export function formatCode(code: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1)
 }
 
-/** Whether an item can still be claimed, with the text colour to show it in. */
-export function itemAvailability(item: OrderItem): { text: string; className: string } {
-  if (item.refundableQuantity > 0) return { text: `${item.refundableQuantity} of ${item.quantity} eligible to claim`, className: 'text-slate-500' }
-  if (item.pendingQuantity > 0) return { text: 'Request in progress', className: 'text-amber-700' }
-  return { text: 'Already refunded', className: 'text-emerald-700' }
+/** "1 order", "2 orders". */
+export function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`
 }

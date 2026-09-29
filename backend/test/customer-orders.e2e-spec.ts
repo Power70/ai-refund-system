@@ -27,8 +27,8 @@ describe('customer orders (e2e)', () => {
     await db?.drop();
   });
 
-  async function ordersFor(email: string, orderNumber: string): Promise<OrderView[]> {
-    const cookie = await signIn(app, email, orderNumber);
+  async function ordersFor(email: string): Promise<OrderView[]> {
+    const cookie = await signIn(app, email);
     const res = await request(app.getHttpServer()).get(ORDERS).set('Cookie', cookie).expect(200);
     return res.body.orders as OrderView[];
   }
@@ -40,12 +40,12 @@ describe('customer orders (e2e)', () => {
   });
 
   it("shows only the signed-in customer's orders, newest first", async () => {
-    const orders = await ordersFor('ada.okafor@example.com', 'WN-7K3P9Q');
+    const orders = await ordersFor('ada.okafor@example.com');
     expect(orders.map((o) => o.orderNumber)).toEqual(['WN-7K3P9Q', 'WN-2HX8LD']);
   });
 
   it('exposes no email, customer id or internal order id', async () => {
-    const cookie = await signIn(app, 'ada.okafor@example.com', 'WN-7K3P9Q');
+    const cookie = await signIn(app, 'ada.okafor@example.com');
     const res = await request(app.getHttpServer()).get(ORDERS).set('Cookie', cookie).expect(200);
     const text = JSON.stringify(res.body);
     expect(text).not.toContain('@');
@@ -56,24 +56,24 @@ describe('customer orders (e2e)', () => {
   });
 
   it('#15 Obi: the refunded kettle has nothing left; the toaster is refundable', async () => {
-    const orders = await ordersFor('obi.chukwu@example.com', 'WN-H9F3LX');
+    const orders = await ordersFor('obi.chukwu@example.com');
     expect(item(orders, 'Electric kettle, 1 L')).toMatchObject({ quantity: 1, refundedQuantity: 1, refundableQuantity: 0 });
     expect(item(orders, 'Toaster, 2-slice')).toMatchObject({ refundableQuantity: 1 });
   });
 
   it('#9 Ifeoma: all three pillows refunded; the candle is untouched', async () => {
-    const orders = await ordersFor('ifeoma.nwosu@example.com', 'WN-6PQ8XE');
+    const orders = await ordersFor('ifeoma.nwosu@example.com');
     expect(item(orders, 'Memory foam pillow')).toMatchObject({ quantity: 3, refundedQuantity: 3, refundableQuantity: 0 });
     expect(item(orders, 'Soy candle, vanilla')).toMatchObject({ refundableQuantity: 1 });
   });
 
   it('#8 Hassan: a denied item can be requested again', async () => {
-    const orders = await ordersFor('hassan.bello@example.com', 'WN-Z2T5HM');
+    const orders = await ordersFor('hassan.bello@example.com');
     expect(item(orders, 'Over-ear headphones')).toMatchObject({ refundedQuantity: 0, pendingQuantity: 0, refundableQuantity: 1 });
   });
 
   it('#6 Femi: the chair is refunded, the mat is still refundable', async () => {
-    const orders = await ordersFor('femi.johnson@example.com', 'WN-8NF4QA');
+    const orders = await ordersFor('femi.johnson@example.com');
     expect(item(orders, 'Ergonomic office chair')).toMatchObject({ refundedQuantity: 1, refundableQuantity: 0 });
     expect(item(orders, 'Standing desk mat, XL')).toMatchObject({ refundableQuantity: 1 });
   });
@@ -89,12 +89,12 @@ describe('customer orders (e2e)', () => {
     }).returning();
     await database.insert(schema.refundRequestLines).values({ requestId: req.id, orderId: order.orderId, orderItemId: order.itemIds[0], quantity: 1, amountMinor: 5500 });
 
-    expect(item(await ordersFor('lara.smith@example.com', 'WN-7XW2QD'), 'Steel water bottle, 750 ml')).toMatchObject({ pendingQuantity: 1, refundableQuantity: 0 });
+    expect(item(await ordersFor('lara.smith@example.com'), 'Steel water bottle, 750 ml')).toMatchObject({ pendingQuantity: 1, refundableQuantity: 0 });
 
     // Once decided and denied, the quantity is free again.
     await database.update(schema.refundRequestLines).set({ finalLineStatus: 'NOT_REFUNDED' }).where(eq(schema.refundRequestLines.requestId, req.id));
     await database.update(schema.refundRequests).set({ state: 'DECIDED', leaseOwner: null, leaseExpiresAt: null }).where(eq(schema.refundRequests.id, req.id));
-    expect(item(await ordersFor('lara.smith@example.com', 'WN-7XW2QD'), 'Steel water bottle, 750 ml')).toMatchObject({ pendingQuantity: 0, refundableQuantity: 1 });
+    expect(item(await ordersFor('lara.smith@example.com'), 'Steel water bottle, 750 ml')).toMatchObject({ pendingQuantity: 0, refundableQuantity: 1 });
     await pool.end();
   });
 });

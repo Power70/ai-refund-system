@@ -1,6 +1,6 @@
 import { IconMessageCircleQuestion, IconTag } from '@tabler/icons-react'
 import type { Order, OrderItem, RefundRequestView } from '../api/client'
-import { formatDate, formatMoney, itemAvailability } from '../lib/format'
+import { formatDate, formatMoney } from '../lib/format'
 import { RequestOutcome } from './DecisionCard'
 import { StatusBadge } from './StatusBadge'
 import { Button, Sheet } from './ui'
@@ -50,9 +50,7 @@ export function OrderDetailsSheet({ order, requests, onAskAbout, onClose }: Orde
           Items
         </h3>
         <ul className="divide-y divide-slate-100">
-          {order.items.map((item) => {
-            const status = itemAvailability(item)
-            return (
+          {order.items.map((item) => (
               <li key={item.id} className="px-4 py-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -67,7 +65,6 @@ export function OrderDetailsSheet({ order, requests, onAskAbout, onClose }: Orde
                     <p className="text-xs text-slate-500">
                       {item.quantity} × {money(item.unitPricePaidMinor)}
                     </p>
-                    <p className={`text-xs ${status.className}`}>{status.text}</p>
                   </div>
                   <span className="shrink-0 text-sm tabular-nums">{money(item.quantity * item.unitPricePaidMinor)}</span>
                 </div>
@@ -77,8 +74,7 @@ export function OrderDetailsSheet({ order, requests, onAskAbout, onClose }: Orde
                   </Button>
                 )}
               </li>
-            )
-          })}
+          ))}
         </ul>
       </section>
 

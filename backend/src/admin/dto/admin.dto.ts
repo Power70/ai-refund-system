@@ -191,3 +191,69 @@ export class ResolveEscalationDto {
   @MaxLength(1000)
   reviewerNote: string;
 }
+
+export class AdminCustomersQueryDto {
+  @ApiPropertyOptional({ description: 'Name or email' })
+  @IsOptional()
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MaxLength(100)
+  q?: string;
+
+  @ApiPropertyOptional({ default: 1, minimum: 1 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(10_000)
+  page = 1;
+
+  @ApiPropertyOptional({ default: 10, minimum: 1, maximum: 100 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  pageSize = 10;
+}
+
+export class AdminCustomerRowDto {
+  @ApiProperty() customerId: string;
+  @ApiProperty({ example: 'Ada Okafor' }) name: string;
+  @ApiProperty({ example: 'ada.okafor@example.com' }) email: string;
+  @ApiProperty() orders: number;
+  @ApiProperty() requests: number;
+  @ApiProperty({ description: 'Requests still processing or waiting for a reviewer' }) openRequests: number;
+  @ApiProperty({ description: 'Cents refunded across all orders' }) refundedMinor: number;
+}
+
+export class AdminCustomerListDto {
+  @ApiProperty({ type: [AdminCustomerRowDto] }) items: AdminCustomerRowDto[];
+  @ApiProperty() total: number;
+  @ApiProperty() page: number;
+  @ApiProperty() pageSize: number;
+}
+
+export class AdminCustomerDetailDto {
+  @ApiProperty() customer: { customerId: string; name: string; email: string; createdAt: string };
+  @ApiProperty() orders: {
+    orderNumber: string;
+    placedAt: string;
+    deliveredAt: string | null;
+    currency: string;
+    totalMinor: number;
+    refundedMinor: number;
+    items: { name: string; sku: string; quantity: number; unitPricePaidMinor: number; finalSale: boolean; refundedQuantity: number; pendingQuantity: number }[];
+  }[];
+  @ApiProperty() requests: {
+    requestId: string;
+    orderNumber: string;
+    createdAt: string;
+    reason: string;
+    status: string;
+    resolution: string | null;
+    requestedAmountMinor: number;
+    approvedAmountMinor: number;
+  }[];
+  @ApiProperty() totals: { orderedMinor: number; refundedMinor: number };
+}

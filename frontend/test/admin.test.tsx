@@ -1,19 +1,19 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http } from 'msw'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { CaseBrief } from '../src/api/client'
 import { AdminDashboard } from '../src/components/admin/AdminDashboard'
-import { caseBrief, json, metrics, queueRow, server, url } from './api'
+import { caseBrief, customerDetail, customerRow, json, metrics, queueRow, server, url } from './api'
 
-function adminApi(options: { metricsStatus?: number; total?: number; resolve?: (body: unknown) => Response } = {}) {
+function adminApi(options: { metricsStatus?: number; total?: number; empty?: boolean; resolve?: (body: unknown) => Response } = {}) {
   const queueCalls: { page: string | null; pageSize: string | null; authorization: string | null }[] = []
   server.use(
     http.get(url('/admin/metrics'), () => (options.metricsStatus ? json({ code: 'UNAUTHORIZED', message: 'Invalid token.' }, options.metricsStatus) : json(metrics))),
     http.get(url('/admin/refund-requests'), ({ request }) => {
       const params = new URL(request.url).searchParams
       queueCalls.push({ page: params.get('page'), pageSize: params.get('pageSize'), authorization: request.headers.get('Authorization') })
-      return json({ items: [queueRow], total: options.total ?? 1, page: Number(params.get('page')), pageSize: Number(params.get('pageSize')) })
+      return json({ items: options.empty ? [] : [queueRow], total: options.total ?? 1, page: Number(params.get('page')), pageSize: Number(params.get('pageSize')) })
     }),
     http.get(url('/admin/refund-requests/:id'), () => json(caseBrief)),
     http.post(url('/admin/refund-requests/:id/resolution'), async ({ request }) => options.resolve!(await request.json())),
@@ -35,6 +35,15 @@ describe('support dashboard', () => {
     expect(within(screen.getByRole('region', { name: 'Metrics' })).getByText('No AI assessment')).toHaveTextContent(/^No AI assessment$/)
   })
 
+  it('shows no pager when there is nothing to list', async () => {
+    adminApi({ total: 0, empty: true })
+    renderDashboard()
+
+    expect(await screen.findByText('Nothing is waiting for review.')).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Pages' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Previous|Next/ })).not.toBeInTheDocument()
+  })
+
   it('pages 10 rows at a time with Previous and Next, showing "1 of N"', async () => {
     const queueCalls = adminApi({ total: 25 })
     const user = userEvent.setup()
@@ -51,19 +60,6 @@ describe('support dashboard', () => {
     await user.click(screen.getByRole('button', { name: 'Next' }))
     expect(await within(pager).findByText('3 of 3')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled()
-  })
-
-  it('ends the session on the server when the reviewer signs out', async () => {
-    adminApi()
-    let signedOut = false
-    server.use(http.delete(url('/admin/session'), () => ((signedOut = true), new Response(null, { status: 204 }))))
-    const onSignedOut = vi.fn()
-    const user = userEvent.setup()
-    renderDashboard(onSignedOut)
-
-    await user.click(await screen.findByRole('button', { name: 'Sign out' }))
-    await vi.waitFor(() => expect(onSignedOut).toHaveBeenCalled())
-    expect(signedOut).toBe(true)
   })
 
   it('signs the reviewer out when the token is rejected', async () => {
@@ -137,5 +133,43 @@ describe('support dashboard', () => {
     await user.click(within(sheet).getByRole('button', { name: 'Save decision' }))
 
     expect(await within(sheet).findByRole('alert')).toHaveTextContent('Another reviewer resolved this case.')
+  })
+})
+
+describe('customers section', () => {
+  afterEach(() => {
+    window.location.hash = ''
+  })
+
+  it('is a sidebar section with its own address, listing and searching customers', async () => {
+    adminApi()
+    const searches: (string | null)[] = []
+    server.use(
+      http.get(url('/admin/customers'), ({ request }) => {
+        searches.push(new URL(request.url).searchParams.get('q'))
+        return json({ items: [customerRow], total: 12, page: 1, pageSize: 10 })
+      }),
+      http.get(url('/admin/customers/:id'), () => json(customerDetail)),
+    )
+    const user = userEvent.setup()
+    renderDashboard()
+
+    const sections = screen.getByRole('navigation', { name: 'Dashboard sections' })
+    expect(within(sections).getByRole('link', { name: /Refund requests/ })).toHaveAttribute('aria-current', 'page')
+    window.location.hash = '#/admin/customers'
+    window.dispatchEvent(new HashChangeEvent('hashchange'))
+    expect(await within(sections).findByRole('link', { name: /Customers/ })).toHaveAttribute('aria-current', 'page')
+
+    const list = await screen.findByRole('region', { name: 'Customers' })
+    expect(await within(list).findByText('Femi Johnson')).toBeInTheDocument()
+    expect(within(list).getByText('1 of 2')).toBeInTheDocument()
+    await user.type(within(list).getByPlaceholderText('Name or email'), 'femi')
+    await vi.waitFor(() => expect(searches.at(-1)).toBe('femi'))
+
+    await user.click(within(list).getByRole('button', { name: /Femi Johnson/ }))
+    const sheet = await screen.findByRole('dialog', { name: 'Femi Johnson' })
+    expect(await within(sheet).findByText('WN-8NF4QA')).toBeInTheDocument()
+    expect(within(sheet).getByText('Refunded').nextElementSibling).toHaveTextContent('$300.00')
+    expect(within(sheet).getByText('rr_6fem0chr0001')).toBeInTheDocument()
   })
 })

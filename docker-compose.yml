@@ -49,8 +49,8 @@ services:
       POLICY_FILE: /app/policy/refund-policy.yaml
       # Signs customer and dashboard session cookies. Empty = a public demo value (with a warning).
       SESSION_SECRET: ${SESSION_SECRET:-demo-session-secret-change-me-in-production}
-      # Support dashboard token. Empty = the public demo token "admin-demo-token" (with a warning).
-      ADMIN_TOKEN: ${ADMIN_TOKEN:-}
+      # Support dashboard password. Empty = the public demo password "admin" (with a warning).
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       # Any supported provider key; the provider is detected from its prefix. Empty = AI disabled.
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_PROVIDER: ${LLM_PROVIDER:-}

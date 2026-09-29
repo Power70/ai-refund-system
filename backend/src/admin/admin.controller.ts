@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, NotFoundException, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, NotFoundException, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiConflictResponse,
@@ -14,13 +14,14 @@ import { ParsePublicRequestIdPipe } from '../common/validation.js';
 import { DetailedHealthDto } from '../health/dto/health.dto.js';
 import { HealthService } from '../health/health.service.js';
 import { AdminService } from './admin.service.js';
-import { AdminMetricsDto, AdminQueueDto, AdminQueueQueryDto, CaseBriefDto, ResolveEscalationDto } from './dto/admin.dto.js';
+import { AdminCustomersService } from './customers.service.js';
+import { AdminCustomerDetailDto, AdminCustomerListDto, AdminCustomersQueryDto, AdminMetricsDto, AdminQueueDto, AdminQueueQueryDto, CaseBriefDto, ResolveEscalationDto } from './dto/admin.dto.js';
 import { ResolutionService } from './resolution.service.js';
 
 @ApiTags('admin')
 @ApiBearerAuth()
-@ApiUnauthorizedResponse({ description: 'Missing or wrong admin token' })
-@ApiTooManyRequestsResponse({ description: 'Too many wrong tokens from this IP' })
+@ApiUnauthorizedResponse({ description: 'Not signed in, or wrong admin password' })
+@ApiTooManyRequestsResponse({ description: 'Too many wrong passwords from this IP' })
 @Controller('admin')
 @UseGuards(AdminAuthGuard)
 export class AdminController {
@@ -28,7 +29,23 @@ export class AdminController {
     private readonly admin: AdminService,
     private readonly resolutions: ResolutionService,
     private readonly health: HealthService,
+    private readonly customers: AdminCustomersService,
   ) {}
+
+  @Get('customers')
+  @ApiOkResponse({ type: AdminCustomerListDto })
+  customerList(@Query() query: AdminCustomersQueryDto): Promise<AdminCustomerListDto> {
+    return this.customers.list(query);
+  }
+
+  @Get('customers/:customerId')
+  @ApiOkResponse({ type: AdminCustomerDetailDto })
+  @ApiNotFoundResponse()
+  async customer(@Param('customerId', new ParseUUIDPipe()) customerId: string): Promise<AdminCustomerDetailDto> {
+    const detail = await this.customers.detail(customerId);
+    if (!detail) throw new NotFoundException('Customer not found.');
+    return detail;
+  }
 
   @Get('refund-requests')
   @ApiOkResponse({ type: AdminQueueDto })

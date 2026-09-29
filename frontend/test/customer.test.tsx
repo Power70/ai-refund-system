@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { SupportWorkspace } from '../src/components/SupportWorkspace'
 import { conversation, customerApi, json, order, proposal, requestView, server, url } from './api'
 
-const renderWorkspace = () => render(<SupportWorkspace firstName="Ada" onSignedOut={() => {}} />)
+const renderWorkspace = () => render(<SupportWorkspace firstName="Ada" />)
 
 /** Records each claim submission and answers with the next response in turn. */
 function submissions(...responses: (() => Response)[]) {
@@ -128,6 +128,9 @@ describe('decision and order details', () => {
     renderWorkspace()
 
     await user.click(await screen.findByRole('button', { name: /WN-7K3P9Q/ }))
+    // The list shows names and prices; neither view says what can still be claimed.
+    expect(screen.getByRole('region', { name: 'Your orders' })).toHaveTextContent('Oxford shirt, blue$49.99')
+    expect(document.body).not.toHaveTextContent(/eligible|can be claimed/i)
     const details = screen.getByRole('dialog', { name: /Order WN-7K3P9Q/ })
     expect(within(details).getByText('Order total').nextElementSibling).toHaveTextContent('$49.99')
     expect(within(details).getByText('Delivery').nextElementSibling).toHaveTextContent('Delivered Sep 23, 2026')

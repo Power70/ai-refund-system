@@ -16,8 +16,8 @@ export const envSchema = z.object({
   SUBMIT_WAIT_MS: z.coerce.number().int().min(0).max(30_000).default(3_000),
   // Minimum AI confidence for an automatic approval. Can only add escalations.
   AI_MIN_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.95),
-  // Admin API bearer token. Falls back to the documented demo token with a startup warning.
-  ADMIN_TOKEN: z.preprocess(blankAsUndefined, z.string().min(12, 'must be at least 12 characters').default('admin-demo-token')),
+  // Support dashboard password. Falls back to the documented demo password "admin" with a startup warning.
+  ADMIN_PASSWORD: z.preprocess(blankAsUndefined, z.string().min(5, 'must be at least 5 characters').max(200).default('admin')),
   // Session cookie signing key. When unset a random key is generated per process (sessions reset on restart).
   SESSION_SECRET: optional(z.string().min(32, 'must be at least 32 characters')),
   // AI provider. Only the key is required; the provider is detected from its prefix.
