@@ -32,6 +32,31 @@ export const customers = pgTable(
   (t) => [check('customers_email_lowercase', sql`${t.email} = lower(${t.email})`)],
 );
 
+export const sessionKindEnum = pgEnum('session_kind', ['CUSTOMER', 'ADMIN']);
+
+/**
+ * Signed-in sessions, customer and admin. The cookie holds a random token; only its SHA-256
+ * is stored. Deleting a row ends that session at once (sign-out), wherever the cookie is.
+ */
+export const sessions = pgTable(
+  'sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tokenHash: text('token_hash').notNull().unique(),
+    kind: sessionKindEnum('kind').notNull(),
+    customerId: uuid('customer_id').references(() => customers.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    // Slides forward with use (idle timeout); never past absoluteExpiresAt.
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    absoluteExpiresAt: timestamp('absolute_expires_at', { withTimezone: true }).notNull(),
+  },
+  (t) => [
+    check('sessions_customer_matches_kind', sql`(${t.kind} = 'CUSTOMER') = (${t.customerId} IS NOT NULL)`),
+    check('sessions_expiry_within_lifetime', sql`${t.expiresAt} <= ${t.absoluteExpiresAt}`),
+    index('sessions_expires_idx').on(t.expiresAt),
+  ],
+);
+
 export const orders = pgTable(
   'orders',
   {

@@ -5,9 +5,8 @@ import request from 'supertest';
 import { createPgPool, type Database } from '../src/database/database.providers.js';
 import * as schema from '../src/database/schema.js';
 import { createTestApp } from './create-test-app.js';
-import { customerClient, prepareDemoDatabase, CSRF, strandedRequest, type TestDatabase } from './support/test-app.js';
+import { ADMIN, CSRF, customerClient, prepareDemoDatabase, strandedRequest, type TestDatabase } from './support/test-app.js';
 
-const ADMIN = { Authorization: 'Bearer admin' };
 const BASE = '/api/v1/admin/refund-requests';
 const NOTE = 'Checked photos with the courier; blue shirt is unworn.';
 
@@ -29,12 +28,12 @@ describe('admin resolution API (e2e)', () => {
     db = drizzle(pool, { schema }) as Database;
 
     // Grace returns both shirts (no AI yet → a person decides); Femi's mat crosses $500 on the order; Ben's lamp is denied.
-    grace = await customerClient(app, 'grace.lee@example.com');
+    grace = await customerClient(app, 'customer+7@example.test');
     const both = [grace.itemId('Linen shirt, blue'), grace.itemId('Linen shirt, white')].map((itemId) => ({ itemId, quantity: 1 }));
     ids.grace = (await grace.submit({ orderNumber: 'WN-4GK1VS', reason: 'CHANGED_MIND', lines: both }).expect(201)).body.requestId;
-    femi = await customerClient(app, 'femi.johnson@example.com');
+    femi = await customerClient(app, 'customer+6@example.test');
     ids.femi = (await femi.submit({ orderNumber: 'WN-8NF4QA', reason: 'DAMAGED', lines: [{ itemId: femi.itemId('Standing desk mat, XL'), quantity: 1 }] }).expect(201)).body.requestId;
-    const ben = await customerClient(app, 'ben.carter@example.com');
+    const ben = await customerClient(app, 'customer+2@example.test');
     ids.ben = (await ben.submit({ orderNumber: 'WN-Q4M1ZT', reason: 'DAMAGED', lines: [{ itemId: ben.itemId('Desk lamp, black'), quantity: 1 }] }).expect(201)).body.requestId;
   });
 

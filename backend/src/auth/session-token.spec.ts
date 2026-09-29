@@ -1,85 +1,28 @@
-import { createHmac } from 'node:crypto';
-import { constantTimeEquals, renewSession, SESSION_MAX_SECONDS, signSessionToken, unverifiedSessionSubject, verifySessionToken } from './session-token.js';
+import { hashSessionToken, isSessionToken, newSessionToken, sessionCookieOptions } from './session-token.js';
 
-const secret = 's'.repeat(32);
-const now = new Date('2026-09-27T12:00:00Z');
-const nowSec = Math.floor(now.getTime() / 1000);
-const payload = { sub: 'customer-1', iat: nowSec, exp: nowSec + 1800 };
-
-describe('session token', () => {
-  it('round-trips a valid token', () => {
-    expect(verifySessionToken(signSessionToken(payload, secret), secret, now)).toEqual(payload);
+describe('session tokens', () => {
+  it('are 256 random bits, different every time', () => {
+    const tokens = new Set(Array.from({ length: 100 }, newSessionToken));
+    expect(tokens.size).toBe(100);
+    for (const token of tokens) expect(isSessionToken(token)).toBe(true);
   });
 
-  it('rejects an expired token', () => {
-    const token = signSessionToken(payload, secret);
-    expect(verifySessionToken(token, secret, new Date((payload.exp + 1) * 1000))).toBeNull();
-    expect(verifySessionToken(token, secret, new Date(payload.exp * 1000))).toBeNull();
+  it('are stored only as a SHA-256 hash', () => {
+    const token = newSessionToken();
+    expect(hashSessionToken(token)).toMatch(/^[0-9a-f]{64}$/);
+    expect(hashSessionToken(token)).not.toContain(token);
+    expect(hashSessionToken(token)).toBe(hashSessionToken(token));
   });
 
-  it('rejects a token signed with another secret', () => {
-    expect(verifySessionToken(signSessionToken(payload, 'x'.repeat(32)), secret, now)).toBeNull();
-  });
-
-  it('rejects a payload swapped to another customer', () => {
-    const [, sig] = signSessionToken(payload, secret).split('.');
-    const forged = `${Buffer.from(JSON.stringify({ ...payload, sub: 'customer-2' })).toString('base64url')}.${sig}`;
-    expect(verifySessionToken(forged, secret, now)).toBeNull();
-  });
-
-  it('rejects an extended expiry', () => {
-    const [, sig] = signSessionToken(payload, secret).split('.');
-    const forged = `${Buffer.from(JSON.stringify({ ...payload, exp: payload.exp + 999_999 })).toString('base64url')}.${sig}`;
-    expect(verifySessionToken(forged, secret, now)).toBeNull();
-  });
-
-  it.each(['', 'abc', 'a.b.c', '.', 'eyJ9.', `${Buffer.from('not json').toString('base64url')}.x`])('rejects malformed input %j without throwing', (token) => {
-    expect(verifySessionToken(token, secret, now)).toBeNull();
-  });
-
-  it('rejects a well-signed token with a malformed payload', () => {
-    const body = Buffer.from(JSON.stringify({ sub: 42 })).toString('base64url');
-    const sig = createHmac('sha256', secret).update(body).digest('base64url');
-    expect(verifySessionToken(`${body}.${sig}`, secret, now)).toBeNull();
+  it.each([undefined, 42, '', 'abc', 'x'.repeat(43) + '=', 'a.b.c', `${'a'.repeat(42)}!`])('rejects %j before any lookup', (value) => {
+    expect(isSessionToken(value)).toBe(false);
   });
 });
 
-describe('unverifiedSessionSubject', () => {
-  it('reads the subject for rate-limit bucketing', () => {
-    expect(unverifiedSessionSubject(signSessionToken(payload, secret))).toBe('customer-1');
-  });
-
-  it.each([undefined, 42, 'garbage', `${Buffer.from(JSON.stringify({ sub: 'x'.repeat(65) })).toString('base64url')}.sig`])('returns null for %j', (token) => {
-    expect(unverifiedSessionSubject(token)).toBeNull();
-  });
-});
-
-describe('constantTimeEquals', () => {
-  it('matches only identical strings', () => {
-    expect(constantTimeEquals('admin-password', 'admin-password')).toBe(true);
-    expect(constantTimeEquals('admin-password', 'admin-demo-tokeN')).toBe(false);
-    expect(constantTimeEquals('admin-password', 'admin-password ')).toBe(false);
-    expect(constantTimeEquals('', 'x')).toBe(false);
-  });
-
-  describe('renewSession (sliding expiry)', () => {
-    const at = (secondsFromIat: number) => new Date((nowSec + secondsFromIat) * 1000);
-
-    it('is not due while more than half of the idle window is left', () => {
-      expect(renewSession(payload, secret, at(10 * 60))).toBeNull();
-    });
-
-    it('restarts the idle window once less than half is left, keeping the sign-in time', () => {
-      const renewed = renewSession(payload, secret, at(20 * 60))!;
-      expect(renewed.expiresAt).toEqual(at(20 * 60 + 1800));
-      expect(verifySessionToken(renewed.token, secret, at(20 * 60))).toEqual({ ...payload, exp: nowSec + 20 * 60 + 1800 });
-    });
-
-    it('never extends past the absolute lifetime', () => {
-      const atCap = { ...payload, exp: nowSec + SESSION_MAX_SECONDS };
-      expect(renewSession(atCap, secret, at(SESSION_MAX_SECONDS - 120))).toBeNull();
-      const nearCap = { ...payload, exp: nowSec + SESSION_MAX_SECONDS - 600 };
-      expect(renewSession(nearCap, secret, at(SESSION_MAX_SECONDS - 1000))!.expiresAt).toEqual(at(SESSION_MAX_SECONDS));
-    });
+describe('sessionCookieOptions', () => {
+  it('is HttpOnly, SameSite=Strict and scoped, Secure over HTTPS', () => {
+    const expires = new Date('2026-09-29T12:30:00Z');
+    expect(sessionCookieOptions(true, '/api/v1/admin', expires)).toEqual({ httpOnly: true, sameSite: 'strict', secure: true, path: '/api/v1/admin', expires });
+    expect(sessionCookieOptions(false)).toEqual({ httpOnly: true, sameSite: 'strict', secure: false, path: '/api' });
   });
 });

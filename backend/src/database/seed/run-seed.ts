@@ -6,19 +6,19 @@
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { validateEnv } from '../../config/env.js';
+import { seedEnvSchema, validateWith } from '../../config/env.js';
 import { PolicyService } from '../../policy/policy.service.js';
 import { createPgPool } from '../database.providers.js';
 import * as schema from '../schema.js';
 import { seedDemoCatalog, seedDemoHistory } from './seed.js';
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  const { DATABASE_URL, POLICY_FILE } = validateEnv(process.env);
+  const { DATABASE_URL, POLICY_FILE, SEED_CUSTOMER_EMAIL, SEED_CUSTOMER_PASSWORD } = validateWith(seedEnvSchema, process.env);
   const pool = createPgPool(DATABASE_URL);
   const db = drizzle(pool, { schema });
   try {
     const now = new Date();
-    const catalog = await seedDemoCatalog(db, now);
+    const catalog = await seedDemoCatalog(db, now, { emailBase: SEED_CUSTOMER_EMAIL, password: SEED_CUSTOMER_PASSWORD });
     const policies = new PolicyService(db, resolve(POLICY_FILE));
     await policies.registerPolicyFile();
     const policy = await policies.activePolicy(now);

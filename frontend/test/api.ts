@@ -80,7 +80,7 @@ export const queueRow: QueueRow = {
   createdAt: '2026-09-28T09:00:00Z',
   source: 'CUSTOMER',
   customerName: 'Kemi Adeyemi',
-  customerEmail: 'kemi.adeyemi@example.com',
+  customerEmail: 'customer+11@example.test',
   orderNumber: 'WN-3VH9TL',
   reason: 'CHANGED_MIND',
   requestedAmountMinor: 6500,
@@ -105,7 +105,7 @@ const line = (lineId: string, itemName: string, amountMinor: number): CaseBrief[
 
 export const caseBrief: CaseBrief = {
   request: { requestId: queueRow.requestId, source: 'CUSTOMER', state: 'DECIDED', createdAt: queueRow.createdAt, attempts: 1, reasonConfirmed: 'CHANGED_MIND', reasonOverridden: false },
-  customer: { name: 'Kemi Adeyemi', email: 'kemi.adeyemi@example.com' },
+  customer: { name: 'Kemi Adeyemi', email: 'customer+11@example.test' },
   order: { orderNumber: 'WN-3VH9TL', placedAt: '2026-09-18T10:00:00Z', deliveredAt: '2026-09-21T10:00:00Z', currency: 'USD' },
   lines: [line('line-shirt', 'Polo shirt, green', 4000), line('line-belt', 'Canvas belt, navy', 2500)],
   decision: {
@@ -131,7 +131,7 @@ export const caseBrief: CaseBrief = {
 export const customerRow: CustomerRow = {
   customerId: '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b',
   name: 'Femi Johnson',
-  email: 'femi.johnson@example.com',
+  email: 'customer+6@example.test',
   orders: 1,
   requests: 2,
   openRequests: 1,
@@ -139,7 +139,7 @@ export const customerRow: CustomerRow = {
 }
 
 export const customerDetail: CustomerDetail = {
-  customer: { customerId: customerRow.customerId, name: 'Femi Johnson', email: 'femi.johnson@example.com', createdAt: '2026-09-01T10:00:00Z' },
+  customer: { customerId: customerRow.customerId, name: 'Femi Johnson', email: 'customer+6@example.test', createdAt: '2026-09-01T10:00:00Z' },
   orders: [
     {
       orderNumber: 'WN-8NF4QA',

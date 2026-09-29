@@ -57,6 +57,13 @@
       "when": 1790674112910,
       "tag": "0007_customer_passwords",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790678513427,
+      "tag": "0008_sessions",
+      "breakpoints": true
     }
   ]
 }

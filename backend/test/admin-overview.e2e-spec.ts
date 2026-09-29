@@ -7,9 +7,8 @@ import request from 'supertest';
 import { createPgPool, type Database } from '../src/database/database.providers.js';
 import * as schema from '../src/database/schema.js';
 import { createTestApp } from './create-test-app.js';
-import { customerClient, prepareDemoDatabase, strandedRequest, type TestDatabase } from './support/test-app.js';
+import { ADMIN, customerClient, prepareDemoDatabase, strandedRequest, type TestDatabase } from './support/test-app.js';
 
-const ADMIN = { Authorization: 'Bearer admin' };
 
 describe('admin metrics and health (e2e)', () => {
   let testDb: TestDatabase;
@@ -71,11 +70,11 @@ describe('admin metrics and health (e2e)', () => {
 
   describe('after new activity and a crashed worker', () => {
     beforeAll(async () => {
-      const ben = await customerClient(app, 'ben.carter@example.com');
+      const ben = await customerClient(app, 'customer+2@example.test');
       await ben.submit({ orderNumber: 'WN-Q4M1ZT', reason: 'DAMAGED', lines: [{ itemId: ben.itemId('Desk lamp, black'), quantity: 1 }] }).expect(201);
-      const femi = await customerClient(app, 'femi.johnson@example.com');
+      const femi = await customerClient(app, 'customer+6@example.test');
       await femi.submit({ orderNumber: 'WN-8NF4QA', reason: 'DAMAGED', lines: [{ itemId: femi.itemId('Standing desk mat, XL'), quantity: 1 }] }).expect(201);
-      const grace = await customerClient(app, 'grace.lee@example.com');
+      const grace = await customerClient(app, 'customer+7@example.test');
       await grace.submit({ orderNumber: 'WN-4GK1VS', reason: 'CHANGED_MIND', lines: [{ itemId: grace.itemId('Linen shirt, blue'), quantity: 1 }] }).expect(201);
       await strandedRequest(db, { orderNumber: 'WN-2JC8WP', sku: 'TABLET-10-128', reason: 'DAMAGED', leaseExpiresAt: new Date(Date.now() - 1_000) });
     });

@@ -1,6 +1,6 @@
 import { SetMetadata, type ExecutionContext } from '@nestjs/common';
 import type { ThrottlerModuleOptions } from '@nestjs/throttler';
-import { SESSION_COOKIE, unverifiedSessionSubject } from '../auth/session-token.js';
+import { hashSessionToken, isSessionToken, SESSION_COOKIE } from '../auth/session-token.js';
 
 export const LOGIN_RATE_LIMIT = 'rateLimit:login';
 export const SUBMIT_RATE_LIMIT = 'rateLimit:submit';
@@ -13,10 +13,10 @@ export const SubmitRateLimit = () => SetMetadata(SUBMIT_RATE_LIMIT, true);
 /** Chat messages (each may cost an AI call): 20 per minute per customer. */
 export const ChatRateLimit = () => SetMetadata(CHAT_RATE_LIMIT, true);
 
-/** Rate-limit key for signed-in routes: the session subject, falling back to the client IP. */
+/** Rate-limit key for signed-in routes: a hash of the session token, falling back to the client IP. */
 export function customerTracker(req: Record<string, any>): string {
-  const sub = unverifiedSessionSubject((req.cookies as Record<string, string> | undefined)?.[SESSION_COOKIE]);
-  return sub ? `customer:${sub}` : `ip:${String(req.ip)}`;
+  const token = (req.cookies as Record<string, string> | undefined)?.[SESSION_COOKIE];
+  return isSessionToken(token) ? `session:${hashSessionToken(token).slice(0, 32)}` : `ip:${String(req.ip)}`;
 }
 
 /**

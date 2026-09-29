@@ -8,7 +8,7 @@ describe('escapeLike', () => {
     expect(escapeLike('50%_off\\x')).toBe('50\\%\\_off\\\\x');
   });
   it('leaves normal text alone', () => {
-    expect(escapeLike('ada.okafor@example.com')).toBe('ada.okafor@example.com');
+    expect(escapeLike('customer+1@example.test')).toBe('customer+1@example.test');
   });
 });
 

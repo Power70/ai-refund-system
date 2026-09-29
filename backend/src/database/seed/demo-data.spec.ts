@@ -1,5 +1,5 @@
 import { wholeDaysBetween } from '../../policy/policy-engine.js';
-import { demoOrderDates, DEMO_CATALOG, DEMO_HISTORY } from './demo-data.js';
+import { demoEmail, demoOrderDates, DEMO_CATALOG, DEMO_HISTORY } from './demo-data.js';
 
 const now = new Date('2026-09-27T09:00:00Z');
 
@@ -25,14 +25,14 @@ describe('demoOrderDates', () => {
 const orders = DEMO_CATALOG.flatMap((c) => c.orders);
 const items = orders.flatMap((o) => o.items);
 
-function orderOf(email: string, index = 0) {
-  const customer = DEMO_CATALOG.find((c) => c.email === email);
-  if (!customer) throw new Error(`no demo customer ${email}`);
+function orderOf(alias: number, index = 0) {
+  const customer = DEMO_CATALOG.find((c) => c.alias === alias);
+  if (!customer) throw new Error(`no demo customer ${alias}`);
   return customer.orders[index];
 }
 
-function daysSinceDelivery(email: string, index = 0): number | null {
-  const { deliveredAt } = demoOrderDates(orderOf(email, index).deliveredDaysAgo, now);
+function daysSinceDelivery(alias: number, index = 0): number | null {
+  const { deliveredAt } = demoOrderDates(orderOf(alias, index).deliveredDaysAgo, now);
   return deliveredAt ? wholeDaysBetween(deliveredAt, now) : null;
 }
 
@@ -45,10 +45,14 @@ describe('demo catalog', () => {
     }
   });
 
-  it('uses unique, lower-case, reserved-domain emails', () => {
-    const emails = DEMO_CATALOG.map((c) => c.email);
-    expect(new Set(emails).size).toBe(emails.length);
-    for (const e of emails) expect(e).toMatch(/^[a-z.]+@example\.com$/);
+  it('numbers the customers 1 to 15, one plus-alias each, and holds no email address', () => {
+    expect(DEMO_CATALOG.map((c) => c.alias)).toEqual(Array.from({ length: 15 }, (_, i) => i + 1));
+    expect(JSON.stringify(DEMO_CATALOG)).not.toContain('@');
+  });
+
+  it('builds each email from the configured base', () => {
+    expect(demoEmail('Someone@Example.com', 3)).toBe('someone+3@example.com');
+    expect(demoEmail('a.b@mail.example.org', 15)).toBe('a.b+15@mail.example.org');
   });
 
   it('uses unique, non-sequential order numbers', () => {
@@ -73,33 +77,33 @@ describe('demo catalog', () => {
 
   describe('scenario facts come out exactly as intended', () => {
     it('#1 Ada: $49.99 shirt delivered 5 days ago', () => {
-      expect(daysSinceDelivery('ada.okafor@example.com')).toBe(5);
-      expect(orderOf('ada.okafor@example.com').items[0].unitPricePaidMinor).toBe(4999);
+      expect(daysSinceDelivery(1)).toBe(5);
+      expect(orderOf(1).items[0].unitPricePaidMinor).toBe(4999);
     });
     it('#2 Ben: delivered 45 days ago (outside the window)', () => {
-      expect(daysSinceDelivery('ben.carter@example.com')).toBe(45);
+      expect(daysSinceDelivery(2)).toBe(45);
     });
     it('#3 Chika and #4 Daniel: final-sale items', () => {
-      expect(orderOf('chika.eze@example.com').items[0].finalSale).toBe(true);
-      expect(orderOf('daniel.mensah@example.com').items[0].finalSale).toBe(true);
+      expect(orderOf(3).items[0].finalSale).toBe(true);
+      expect(orderOf(4).items[0].finalSale).toBe(true);
     });
     it('#5 Efe: $749 laptop', () => {
-      expect(orderOf('efe.adebayo@example.com').items[0].unitPricePaidMinor).toBe(74900);
+      expect(orderOf(5).items[0].unitPricePaidMinor).toBe(74900);
     });
     it('#7 Grace: two shirts in one order', () => {
-      expect(orderOf('grace.lee@example.com').items.map((i) => i.name)).toEqual(['Linen shirt, blue', 'Linen shirt, white']);
+      expect(orderOf(7).items.map((i) => i.name)).toEqual(['Linen shirt, blue', 'Linen shirt, white']);
     });
     it('#10 Jide: not delivered yet', () => {
-      expect(daysSinceDelivery('jide.afolabi@example.com')).toBeNull();
+      expect(daysSinceDelivery(10)).toBeNull();
     });
     it('#11 Kemi: a regular shirt and a final-sale belt in one order', () => {
-      expect(orderOf('kemi.adeyemi@example.com').items.map((i) => i.finalSale ?? false)).toEqual([false, true]);
+      expect(orderOf(11).items.map((i) => i.finalSale ?? false)).toEqual([false, true]);
     });
     it('#14 Ngozi: exactly $500.00', () => {
-      expect(orderOf('ngozi.obi@example.com').items[0].unitPricePaidMinor).toBe(50000);
+      expect(orderOf(14).items[0].unitPricePaidMinor).toBe(50000);
     });
     it('Ifeoma has three orders to build request history on', () => {
-      expect(DEMO_CATALOG.find((c) => c.email === 'ifeoma.nwosu@example.com')?.orders).toHaveLength(3);
+      expect(DEMO_CATALOG.find((c) => c.alias === 9)?.orders).toHaveLength(3);
     });
   });
 });
@@ -113,7 +117,7 @@ describe('demo history data', () => {
 
   it('only references customers, orders and SKUs that exist in the catalog', () => {
     for (const entry of DEMO_HISTORY) {
-      const customer = DEMO_CATALOG.find((c) => c.email === entry.customerEmail);
+      const customer = DEMO_CATALOG.find((c) => c.alias === entry.customerAlias);
       const order = customer?.orders.find((o) => o.orderNumber === entry.orderNumber);
       expect(order, entry.publicId).toBeDefined();
       for (const line of entry.lines) expect(order!.items.some((i) => i.sku === line.sku), `${entry.publicId} ${line.sku}`).toBe(true);

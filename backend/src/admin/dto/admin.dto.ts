@@ -220,7 +220,7 @@ export class AdminCustomersQueryDto {
 export class AdminCustomerRowDto {
   @ApiProperty() customerId: string;
   @ApiProperty({ example: 'Ada Okafor' }) name: string;
-  @ApiProperty({ example: 'ada.okafor@example.com' }) email: string;
+  @ApiProperty({ example: 'someone+1@example.org' }) email: string;
   @ApiProperty() orders: number;
   @ApiProperty() requests: number;
   @ApiProperty({ description: 'Requests still processing or waiting for a reviewer' }) openRequests: number;

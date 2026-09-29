@@ -1,6 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { createHash } from 'node:crypto';
+import { hashPassword } from '../../auth/passwords.js';
 import { deriveResolution } from '../../admin/resolution.service.js';
 import { canonicalJson } from '../../common/canonical-json.js';
 import { evaluateRequest } from '../../policy/policy-engine.js';
@@ -10,8 +11,14 @@ import { finalLineStatuses } from '../../refunds/decision.rules.js';
 import { RequestFactsService } from '../../refunds/request-facts.service.js';
 import type { Database } from '../database.providers.js';
 import * as schema from '../schema.js';
-import { DEMO_CATALOG, demoOrderDates, DEMO_HISTORY, type DemoCustomer, type DemoHistoryEntry } from './demo-data.js';
-import { DEMO_CUSTOMER_PASSWORD, hashPassword } from '../../auth/passwords.js';
+import { DEMO_CATALOG, demoEmail, demoOrderDates, DEMO_HISTORY, type DemoCustomer, type DemoHistoryEntry } from './demo-data.js';
+
+/** Sign-in details for the seeded customers. Supplied by configuration (SEED_CUSTOMER_*), never stored in code. */
+export interface DemoCredentials {
+  /** e.g. someone@example.org; customer N signs in as someone+N@example.org. */
+  emailBase: string;
+  password: string;
+}
 
 export interface SeedSummary {
   customers: number;
@@ -28,18 +35,20 @@ export interface SeedSummary {
 export async function seedDemoCatalog(
   db: NodePgDatabase<typeof schema>,
   now: Date,
+  credentials: DemoCredentials,
   catalog: readonly DemoCustomer[] = DEMO_CATALOG,
 ): Promise<SeedSummary> {
   const summary: SeedSummary = { customers: 0, orders: 0, items: 0 };
 
-  // One hash (one salt) for the shared demo password keeps seeding fast; real accounts get their own.
-  const passwordHash = await hashPassword(DEMO_CUSTOMER_PASSWORD);
+  // Each customer gets their own salt, so equal passwords never produce equal hashes.
+  const passwordHashes = await Promise.all(catalog.map(() => hashPassword(credentials.password)));
 
   await db.transaction(async (tx) => {
-    for (const demo of catalog) {
+    for (const [index, demo] of catalog.entries()) {
+      const passwordHash = passwordHashes[index];
       const [customer] = await tx
         .insert(schema.customers)
-        .values({ name: demo.name, email: demo.email.toLowerCase(), passwordHash })
+        .values({ name: demo.name, email: demoEmail(credentials.emailBase, demo.alias), passwordHash })
         .onConflictDoUpdate({ target: schema.customers.email, set: { name: demo.name, passwordHash } })
         .returning({ id: schema.customers.id });
       summary.customers++;
@@ -123,9 +132,8 @@ async function create(tx: Database, factsService: RequestFactsService, policy: R
   const [order] = await tx
     .select({ id: schema.orders.id, customerId: schema.orders.customerId, currency: schema.orders.currency })
     .from(schema.orders)
-    .innerJoin(schema.customers, eq(schema.customers.id, schema.orders.customerId))
-    .where(and(eq(schema.orders.orderNumber, entry.orderNumber), eq(schema.customers.email, entry.customerEmail)));
-  if (!order) throw new Error(`Demo history ${entry.publicId}: order ${entry.orderNumber} not found for ${entry.customerEmail}`);
+    .where(eq(schema.orders.orderNumber, entry.orderNumber));
+  if (!order) throw new Error(`Demo history ${entry.publicId}: order ${entry.orderNumber} not found`);
 
   const items = await tx
     .select({ id: schema.orderItems.id, sku: schema.orderItems.sku, name: schema.orderItems.name })

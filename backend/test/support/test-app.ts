@@ -14,9 +14,19 @@ import { seedDemoCatalog, seedDemoHistory } from '../../src/database/seed/seed.j
 import type { RefundReason } from '../../src/policy/policy-schema.js';
 import { policyService } from './policy-fixtures.js';
 
-/** Server used for tests. Override with TEST_DATABASE_ADMIN_URL (must be allowed to CREATE DATABASE). */
-const ADMIN_URL =
-  process.env.TEST_DATABASE_ADMIN_URL ?? 'postgresql://refund:refund_demo_password@127.0.0.1:5432/postgres';
+/** Server used for tests, from TEST_DATABASE_ADMIN_URL (must be allowed to CREATE DATABASE). */
+function adminUrl(): string {
+  const url = process.env.TEST_DATABASE_ADMIN_URL;
+  if (!url) throw new Error('Set TEST_DATABASE_ADMIN_URL to a Postgres URL allowed to CREATE DATABASE, e.g. postgresql://user:pass@127.0.0.1:5432/postgres');
+  return url;
+}
+
+/** Seeded customers sign in as customer+N@example.test (N = 1…15) with a password made up per run. */
+export const TEST_EMAIL_BASE = 'customer@example.test';
+export const CUSTOMER_PASSWORD = process.env.TEST_CUSTOMER_PASSWORD!;
+export const TEST_SEED = { emailBase: TEST_EMAIL_BASE, password: CUSTOMER_PASSWORD };
+/** `Authorization` header for admin API calls, from the per-run ADMIN_PASSWORD. */
+export const ADMIN = { Authorization: `Bearer ${process.env.ADMIN_PASSWORD}` };
 
 export interface TestDatabase {
   url: string;
@@ -27,7 +37,7 @@ export interface TestDatabase {
 export async function createTestDatabase(): Promise<TestDatabase> {
   const name = `refund_test_${randomBytes(6).toString('hex')}`;
   await withAdmin((client) => client.query(`CREATE DATABASE "${name}"`));
-  const url = new URL(ADMIN_URL);
+  const url = new URL(adminUrl());
   url.pathname = `/${name}`;
   return {
     url: url.toString(),
@@ -36,7 +46,7 @@ export async function createTestDatabase(): Promise<TestDatabase> {
 }
 
 async function withAdmin<T>(fn: (client: pg.Client) => Promise<T>): Promise<T> {
-  const client = new pg.Client({ connectionString: ADMIN_URL });
+  const client = new pg.Client({ connectionString: adminUrl() });
   await client.connect();
   try {
     return await fn(client);
@@ -73,7 +83,7 @@ export async function prepareDemoDatabase(): Promise<TestDatabase> {
   try {
     const db = drizzle(pool, { schema });
     const now = new Date();
-    await seedDemoCatalog(db, now);
+    await seedDemoCatalog(db, now, TEST_SEED);
     await policyService(db).registerPolicyFile();
     await seedDemoHistory(db, await policyService(db).activePolicy(now), now);
   } finally {
@@ -95,9 +105,6 @@ export function asVisitor(): { 'X-Forwarded-For': string } {
 }
 
 /** Signs in and returns the session cookie header value ("rs_session=..."). */
-/** Every seeded customer's password. */
-export const CUSTOMER_PASSWORD = 'customer';
-
 export async function signIn(app: NestExpressApplication, email: string): Promise<string> {
   const res = await request(app.getHttpServer()).post('/api/v1/customer/session').set(CSRF).set(asVisitor()).send({ email, password: CUSTOMER_PASSWORD }).expect(200);
   const cookie = ([] as string[]).concat(res.headers['set-cookie'] ?? []).find((c) => c.startsWith('rs_session='));

@@ -10,6 +10,6 @@ RUN npm run build && chmod -R a+rX dist nginx
 # Unprivileged Nginx: runs as a non-root user and listens on 8080.
 FROM nginxinc/nginx-unprivileged:stable-alpine AS runtime
 COPY --from=build /app/nginx/default.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/nginx/security-headers.conf /etc/nginx/snippets/security-headers.conf
+COPY --from=build /app/nginx/security-headers.conf /app/nginx/proxy-api.conf /etc/nginx/snippets/
 COPY --from=build /app/dist /usr/share/nginx/html
 EXPOSE 8080

@@ -49,7 +49,7 @@ describe('app shell', () => {
       http.get(url('/admin/session'), unauthorized),
       http.post(url('/admin/session'), async ({ request }) => {
         sent = await request.json()
-        return (sent as { password: string }).password === 'admin' ? json({ expiresAt: '2026-09-29T12:00:00Z' }) : json({ statusCode: 401, message: 'Invalid credentials.' }, 401)
+        return (sent as { password: string }).password === 'reviewer passphrase' ? json({ expiresAt: '2026-09-29T12:00:00Z' }) : json({ statusCode: 401, message: 'Invalid credentials.' }, 401)
       }),
     )
     adminEndpoints()
@@ -57,15 +57,16 @@ describe('app shell', () => {
     render(<App />)
 
     const field = await screen.findByLabelText('Password')
+    expect(document.body).not.toHaveTextContent(/demo password|ADMIN_PASSWORD/i)
     await user.type(field, 'wrong')
     await user.click(screen.getByRole('button', { name: 'Open dashboard' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid credentials.')
 
     await user.clear(field)
-    await user.type(field, 'admin')
+    await user.type(field, 'reviewer passphrase')
     await user.click(screen.getByRole('button', { name: 'Open dashboard' }))
     expect(await screen.findByRole('heading', { name: 'Support dashboard' })).toBeInTheDocument()
-    expect(sent).toEqual({ password: 'admin' })
+    expect(sent).toEqual({ password: 'reviewer passphrase' })
   })
 
   it('shows "Trying to reconnect" only while the service is unreachable', async () => {
@@ -88,24 +89,24 @@ describe('app shell', () => {
       http.get(url('/customer/session'), unauthorized),
       http.post(url('/customer/session'), async ({ request }) => {
         sent = await request.json()
-        return (sent as { password: string }).password === 'customer' ? json({ firstName: 'Ada', expiresAt: '2026-09-29T12:00:00Z' }) : json({ statusCode: 401, message: 'Invalid credentials.' }, 401)
+        return (sent as { password: string }).password === 'customer passphrase' ? json({ firstName: 'Ada', expiresAt: '2026-09-29T12:00:00Z' }) : json({ statusCode: 401, message: 'Invalid credentials.' }, 401)
       }),
     )
     customerApi(conversation())
     const user = userEvent.setup()
     render(<App />)
 
-    await user.type(await screen.findByLabelText('Email'), 'ada.okafor@example.com')
+    await user.type(await screen.findByLabelText('Email'), 'customer+1@example.test')
     await user.type(screen.getByLabelText('Password'), 'nope')
     await user.click(screen.getByRole('button', { name: 'Sign in' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Invalid credentials.')
 
     expect(screen.queryByText(/Demo accounts/i)).not.toBeInTheDocument()
     await user.clear(screen.getByLabelText('Password'))
-    await user.type(screen.getByLabelText('Password'), 'customer')
+    await user.type(screen.getByLabelText('Password'), 'customer passphrase')
     await user.click(screen.getByRole('button', { name: 'Sign in' }))
     expect(await screen.findByText(/how can we help\?/)).toBeInTheDocument()
-    expect(sent).toEqual({ email: 'ada.okafor@example.com', password: 'customer' })
+    expect(sent).toEqual({ email: 'customer+1@example.test', password: 'customer passphrase' })
   })
 
   it('signs a customer out from the top bar, ending the session on the server', async () => {

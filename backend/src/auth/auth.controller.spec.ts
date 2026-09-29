@@ -4,19 +4,19 @@ import { AuthController } from './auth.controller.js';
 import type { AuthService } from './auth.service.js';
 
 function setup() {
-  const auth = { signIn: vi.fn(), describeCustomer: vi.fn() };
+  const auth = { signIn: vi.fn(), signOut: vi.fn().mockResolvedValue(undefined), describeCustomer: vi.fn() };
   const res = { cookie: vi.fn(), clearCookie: vi.fn() };
   const controller = new AuthController(auth as unknown as AuthService);
   return { auth, res: res as unknown as Response & typeof res, controller };
 }
-const req = (secure = false) => ({ secure }) as Request;
+const req = (secure = false, cookies: Record<string, string> = {}) => ({ secure, cookies }) as unknown as Request;
 
 describe('AuthController', () => {
   it('signs in and sets an HttpOnly, SameSite=Strict cookie scoped to /api', async () => {
     const { auth, res, controller } = setup();
     auth.signIn.mockResolvedValue({ token: 'tok', firstName: 'Ada', expiresAt: new Date('2026-09-27T12:30:00Z') });
 
-    await expect(controller.signIn({ email: 'ada@example.com', password: 'customer' }, req(true), res)).resolves.toEqual({
+    await expect(controller.signIn({ email: 'ada@example.com', password: 'any password' }, req(true), res)).resolves.toEqual({
       firstName: 'Ada',
       expiresAt: '2026-09-27T12:30:00.000Z',
     });
@@ -30,9 +30,17 @@ describe('AuthController', () => {
     await expect(controller.current('customer-1')).rejects.toThrow(NotFoundException);
   });
 
-  it('signs out by clearing the cookie with the same scope', () => {
-    const { res, controller } = setup();
-    controller.signOut(req(), res);
+  it('ends any earlier session in this browser when signing in again', async () => {
+    const { auth, res, controller } = setup();
+    auth.signIn.mockResolvedValue({ token: 'new', firstName: 'Ada', expiresAt: new Date('2026-09-27T12:30:00Z') });
+    await controller.signIn({ email: 'ada@example.com', password: 'any password' }, req(false, { rs_session: 'old' }), res);
+    expect(auth.signOut).toHaveBeenCalledWith('old');
+  });
+
+  it('signs out by ending the session on the server and clearing the cookie with the same scope', async () => {
+    const { auth, res, controller } = setup();
+    await controller.signOut(req(false, { rs_session: 'tok' }), res);
+    expect(auth.signOut).toHaveBeenCalledWith('tok');
     expect(res.clearCookie).toHaveBeenCalledWith('rs_session', expect.objectContaining({ path: '/api', httpOnly: true }));
     expect(res.clearCookie.mock.calls[0][1]).not.toHaveProperty('maxAge');
   });

@@ -7,7 +7,7 @@ import * as schema from '../src/database/schema.js';
 import { seedDemoCatalog } from '../src/database/seed/seed.js';
 import { generatePublicRequestId } from '../src/common/validation.js';
 import { policyDocument, policyService } from './support/policy-fixtures.js';
-import { createTestDatabase, type TestDatabase } from './support/test-app.js';
+import { createTestDatabase, TEST_SEED, type TestDatabase } from './support/test-app.js';
 
 const CHECK = '23514';
 const UNIQUE = '23505';
@@ -30,10 +30,10 @@ describe('refund request schema (e2e, real PostgreSQL)', () => {
     await runMigrations(testDb.url);
     pool = createPgPool(testDb.url);
     db = drizzle(pool, { schema });
-    await seedDemoCatalog(db, new Date());
+    await seedDemoCatalog(db, new Date(), TEST_SEED);
     policyVersionId = (await policyService(db).register(policyDocument('v1', '2026-01-01T00:00:00Z'))).policy.id;
-    ada = await customerWithItem('ada.okafor@example.com', 'WN-7K3P9Q');
-    ben = await customerWithItem('ben.carter@example.com', 'WN-Q4M1ZT');
+    ada = await customerWithItem('customer+1@example.test', 'WN-7K3P9Q');
+    ben = await customerWithItem('customer+2@example.test', 'WN-Q4M1ZT');
   });
 
   afterAll(async () => {

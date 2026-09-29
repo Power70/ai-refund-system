@@ -10,7 +10,7 @@ import type { RegisteredPolicy } from '../src/policy/policy.service.js';
 import type { RefundReason } from '../src/policy/policy-schema.js';
 import { RequestFactsService } from '../src/refunds/request-facts.service.js';
 import { policyService } from './support/policy-fixtures.js';
-import { demoOrder, requestByPublicId, createTestDatabase, type TestDatabase } from './support/test-app.js';
+import { createTestDatabase, demoOrder, requestByPublicId, TEST_SEED, type TestDatabase } from './support/test-app.js';
 
 const DAY_MS = 86_400_000;
 
@@ -30,7 +30,7 @@ describe('demo world (e2e, real PostgreSQL)', () => {
     await runMigrations(testDb.url);
     pool = createPgPool(testDb.url);
     db = drizzle(pool, { schema });
-    await seedDemoCatalog(db, now);
+    await seedDemoCatalog(db, now, TEST_SEED);
     const policies = policyService(db);
     await policies.registerPolicyFile();
     policy = await policies.activePolicy(now);

@@ -120,7 +120,9 @@ async function request<T>(method: string, path: string, options: { body?: unknow
   const body = (await res.json().catch(() => null)) as { code?: string; message?: string | string[] } | null
   if (!res.ok) {
     const message = Array.isArray(body?.message) ? body.message[0] : body?.message
-    throw new ApiError(res.status, body?.code ?? null, message ?? `Request failed (${res.status}).`)
+    // The proxy's own 429 (sign-in and request limits) has no JSON body.
+    const fallback = res.status === 429 ? 'Too many requests. Please wait a moment and try again.' : `Request failed (${res.status}).`
+    throw new ApiError(res.status, body?.code ?? null, message ?? fallback)
   }
   return body as T
 }

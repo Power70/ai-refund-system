@@ -4,6 +4,7 @@ import { and, asc, eq, lt } from 'drizzle-orm';
 import { runWithCorrelation } from '../common/correlation.js';
 import { DATABASE, type Database } from '../database/database.providers.js';
 import { refundRequests } from '../database/schema.js';
+import { SessionsService } from '../auth/sessions.service.js';
 import { DecisionService } from './decision.service.js';
 
 /** Injection token: sweep interval in ms; 0 disables the timer (tests call `sweepOnce`). */
@@ -39,6 +40,7 @@ export class SweeperService implements OnApplicationBootstrap, OnApplicationShut
     @Inject(DATABASE) private readonly db: Database,
     @Inject(SWEEPER_INTERVAL_MS) private readonly intervalMs: number,
     private readonly decisions: DecisionService,
+    private readonly sessions: SessionsService,
   ) {}
 
   onApplicationBootstrap(): void {
@@ -52,10 +54,13 @@ export class SweeperService implements OnApplicationBootstrap, OnApplicationShut
     await this.running; // let an in-flight pass finish before the pool closes
   }
 
-  /** Timer entry point: passes never overlap, and a failed pass is logged and retried next tick. */
+  /** Timer entry point: passes never overlap, and a failed pass is logged and retried next tick. Also removes expired sessions. */
   sweep(): Promise<SweepResult | null> {
     // Each pass has its own correlation ID, so its audit records and log lines group together.
-    this.running ??= runWithCorrelation(`sweep-${randomUUID()}`, () => this.sweepOnce())
+    this.running ??= runWithCorrelation(`sweep-${randomUUID()}`, async () => {
+      await this.sessions.purgeExpired();
+      return this.sweepOnce();
+    })
       .then((result) => {
         if (result.found > 0) this.logger.log(`Swept ${result.found}: ${result.decided} decided, ${result.escalated} escalated, ${result.retryLater} to retry`);
         return result;

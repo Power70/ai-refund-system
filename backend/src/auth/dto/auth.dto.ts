@@ -3,13 +3,13 @@ import { Transform } from 'class-transformer';
 import { IsEmail, IsString, Length } from 'class-validator';
 
 export class StartSessionDto {
-  @ApiProperty({ example: 'ada.okafor@example.com' })
+  @ApiProperty({ example: 'someone+1@example.org' })
   @Transform(({ value }) => (typeof value === 'string' ? value.trim().toLowerCase() : value))
   @IsEmail()
   @Length(3, 254)
   email: string;
 
-  @ApiProperty({ example: 'customer' })
+  @ApiProperty({ format: 'password' })
   @IsString()
   @Length(1, 200)
   password: string;
@@ -29,7 +29,7 @@ export class CurrentCustomerDto {
 }
 
 export class StartAdminSessionDto {
-  @ApiProperty({ example: 'admin' })
+  @ApiProperty({ format: 'password', description: 'ADMIN_PASSWORD' })
   @IsString()
   @Length(1, 200)
   password: string;

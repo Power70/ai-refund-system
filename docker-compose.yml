@@ -1,14 +1,23 @@
 # One command: `docker-compose up` (or `docker compose up`).
-# Works with no .env file: every value has a default. To override, copy
-# .env.example to .env — Compose reads it automatically for ${...} values.
-# No env_file directive is used, so both legacy docker-compose and Compose v2 work.
+# Secrets have no defaults: copy .env.example to .env and fill in the required values.
+# Compose reads .env automatically for ${...} values and stops with a message naming
+# any that are missing. No env_file directive is used, so both legacy docker-compose
+# and Compose v2 work.
+
+# Containers never gain privileges after start (no setuid), and the app containers drop
+# every Linux capability; none of them needs one.
+x-hardened: &hardened
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
 
 services:
   db:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-refund}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-refund_demo_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}
       POSTGRES_DB: ${POSTGRES_DB:-refund_support}
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -22,15 +31,19 @@ services:
   # One-shot: applies pending SQL migrations and loads the demo data, then exits.
   # The API starts only after it succeeds. Both steps are safe to repeat on every start.
   migrate:
+    <<: *hardened
     build:
       context: ./backend
       target: runtime
     command: ["sh", "-c", "node dist/database/run-migrations.js && node dist/database/seed/run-seed.js"]
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://${POSTGRES_USER:-refund}:${POSTGRES_PASSWORD:-refund_demo_password}@db:5432/${POSTGRES_DB:-refund_support}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-refund}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-refund_support}
       # The demo history is decided under the refund policy, so seeding registers it first.
       POLICY_FILE: /app/policy/refund-policy.yaml
+      # Demo customer N (1 to 15) signs in as <local>+N@<domain> of this address, with this password.
+      SEED_CUSTOMER_EMAIL: ${SEED_CUSTOMER_EMAIL:?Set SEED_CUSTOMER_EMAIL in .env (see .env.example)}
+      SEED_CUSTOMER_PASSWORD: ${SEED_CUSTOMER_PASSWORD:?Set SEED_CUSTOMER_PASSWORD in .env (see .env.example)}
     volumes:
       - ./policy:/app/policy:ro
     depends_on:
@@ -39,18 +52,19 @@ services:
     restart: "no"
 
   api:
+    <<: *hardened
     build:
       context: ./backend
       target: runtime
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgresql://${POSTGRES_USER:-refund}:${POSTGRES_PASSWORD:-refund_demo_password}@db:5432/${POSTGRES_DB:-refund_support}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-refund}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-refund_support}
       POLICY_FILE: /app/policy/refund-policy.yaml
-      # Signs customer and dashboard session cookies. Empty = a public demo value (with a warning).
-      SESSION_SECRET: ${SESSION_SECRET:-demo-session-secret-change-me-in-production}
-      # Support dashboard password. Empty = the public demo password "admin" (with a warning).
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # Support dashboard password. Required; the API refuses short or well-known ones.
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in .env (see .env.example)}
+      # API reference at /docs. Off unless set to true.
+      API_DOCS: ${API_DOCS:-false}
       # Any supported provider key; the provider is detected from its prefix. Empty = AI disabled.
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_PROVIDER: ${LLM_PROVIDER:-}
@@ -75,9 +89,10 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
-    # Not published to the host: reached through the web proxy at /api and /docs.
+    # Not published to the host: reached through the web proxy at /api (and /docs when enabled).
 
   web:
+    <<: *hardened
     build:
       context: ./frontend
       target: runtime

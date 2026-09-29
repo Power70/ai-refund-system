@@ -8,7 +8,7 @@ import { seedDemoCatalog } from '../src/database/seed/seed.js';
 import { generatePublicRequestId } from '../src/common/validation.js';
 import { ItemNotInOrderError, RequestFactsService } from '../src/refunds/request-facts.service.js';
 import { policyDocument, policyService } from './support/policy-fixtures.js';
-import { demoOrder, createTestDatabase, type TestDatabase } from './support/test-app.js';
+import { createTestDatabase, demoOrder, TEST_SEED, type TestDatabase } from './support/test-app.js';
 
 const DAY_MS = 86_400_000;
 
@@ -26,7 +26,7 @@ describe('RequestFactsService (e2e, real PostgreSQL)', () => {
     pool = createPgPool(testDb.url);
     db = drizzle(pool, { schema });
     factsService = new RequestFactsService(db);
-    await seedDemoCatalog(db, now);
+    await seedDemoCatalog(db, now, TEST_SEED);
     policyVersionId = (await policyService(db).register(policyDocument('v1', '2026-01-01T00:00:00Z'))).policy.id;
   });
 

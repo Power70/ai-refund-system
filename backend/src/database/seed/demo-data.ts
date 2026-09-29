@@ -18,7 +18,8 @@ export interface DemoOrder {
 
 export interface DemoCustomer {
   name: string;
-  email: string;
+  /** Email plus-alias number: the seed signs this customer up as <local>+<alias>@<domain> of SEED_CUSTOMER_EMAIL. */
+  alias: number;
   /** Which demo scenario this customer exists for (documentation only, not stored). */
   scenario: string;
   orders: DemoOrder[];
@@ -27,7 +28,7 @@ export interface DemoCustomer {
 export interface DemoHistoryEntry {
   /** Fixed so re-seeding recognises it; same format as real request ids. */
   publicId: string;
-  customerEmail: string;
+  customerAlias: number;
   orderNumber: string;
   /** When the request was made, in whole days before seeding. */
   daysAgo: number;
@@ -37,6 +38,12 @@ export interface DemoHistoryEntry {
   resolution?: { approveSkus: string[]; note: string; daysAfter: number };
   /** What the committed policy decides; checked by tests, never by the seed itself. */
   expected: 'APPROVED' | 'DENIED' | 'ESCALATED';
+}
+
+/** `nwisuanu@gmail.com` + 3 → `nwisuanu+3@gmail.com`. The base comes from configuration, never from code. */
+export function demoEmail(base: string, alias: number): string {
+  const at = base.lastIndexOf('@');
+  return `${base.slice(0, at)}+${alias}${base.slice(at)}`.toLowerCase();
 }
 
 const HOUR_MS = 60 * 60 * 1000;
@@ -65,40 +72,40 @@ export function demoOrderDates(deliveredDaysAgo: number | null, now: Date): { pl
  */
 export const DEMO_CATALOG: readonly DemoCustomer[] = [
   {
-    name: 'Ada Okafor', email: 'ada.okafor@example.com', scenario: '#1 damaged shirt within 30 days → approved',
+    name: 'Ada Okafor', alias: 1, scenario: '#1 damaged shirt within 30 days → approved',
     orders: [
       { orderNumber: 'WN-7K3P9Q', deliveredDaysAgo: 5, items: [{ sku: 'SHIRT-OXF-BLU-M', name: 'Oxford shirt, blue', category: 'apparel', unitPricePaidMinor: 4999, quantity: 1 }] },
       { orderNumber: 'WN-2HX8LD', deliveredDaysAgo: 64, items: [{ sku: 'MUG-CER-WHT', name: 'Ceramic mug, white', category: 'home', unitPricePaidMinor: 1200, quantity: 2 }] },
     ],
   },
   {
-    name: 'Ben Carter', email: 'ben.carter@example.com', scenario: '#2 damaged item after 45 days → denied (window)',
+    name: 'Ben Carter', alias: 2, scenario: '#2 damaged item after 45 days → denied (window)',
     orders: [
       { orderNumber: 'WN-Q4M1ZT', deliveredDaysAgo: 45, items: [{ sku: 'LAMP-DSK-BLK', name: 'Desk lamp, black', category: 'home', unitPricePaidMinor: 3500, quantity: 1 }] },
     ],
   },
   {
-    name: 'Chika Eze', email: 'chika.eze@example.com', scenario: '#3 final-sale belt, changed mind → denied (final sale)',
+    name: 'Chika Eze', alias: 3, scenario: '#3 final-sale belt, changed mind → denied (final sale)',
     orders: [
       { orderNumber: 'WN-9TB6RW', deliveredDaysAgo: 10, items: [{ sku: 'BELT-LTH-BRN', name: 'Leather belt, brown (clearance)', category: 'accessories', unitPricePaidMinor: 2500, quantity: 1, finalSale: true }] },
       { orderNumber: 'WN-5VJ2NC', deliveredDaysAgo: 120, items: [{ sku: 'SCARF-WOL-GRY', name: 'Wool scarf, grey', category: 'accessories', unitPricePaidMinor: 2800, quantity: 1 }] },
     ],
   },
   {
-    name: 'Daniel Mensah', email: 'daniel.mensah@example.com', scenario: '#4 final-sale item arrived damaged → escalated (conflict)',
+    name: 'Daniel Mensah', alias: 4, scenario: '#4 final-sale item arrived damaged → escalated (conflict)',
     orders: [
       { orderNumber: 'WN-X8D3KF', deliveredDaysAgo: 3, items: [{ sku: 'JKT-DNM-IND-L', name: 'Denim jacket (final sale)', category: 'apparel', unitPricePaidMinor: 6000, quantity: 1, finalSale: true }] },
     ],
   },
   {
-    name: 'Efe Adebayo', email: 'efe.adebayo@example.com', scenario: '#5 wrong laptop, $749 → escalated (over $500)',
+    name: 'Efe Adebayo', alias: 5, scenario: '#5 wrong laptop, $749 → escalated (over $500)',
     orders: [
       { orderNumber: 'WN-L6W9PH', deliveredDaysAgo: 4, items: [{ sku: 'LAPTOP-14-512', name: 'Laptop 14", 512 GB', category: 'electronics', unitPricePaidMinor: 74900, quantity: 1 }] },
       { orderNumber: 'WN-3RC7YB', deliveredDaysAgo: 30, items: [{ sku: 'SLEEVE-LAP-14', name: 'Laptop sleeve 14"', category: 'accessories', unitPricePaidMinor: 2200, quantity: 1 }] },
     ],
   },
   {
-    name: 'Femi Johnson', email: 'femi.johnson@example.com', scenario: '#6 $280 item after $300 refunded on the same order → escalated (cumulative)',
+    name: 'Femi Johnson', alias: 6, scenario: '#6 $280 item after $300 refunded on the same order → escalated (cumulative)',
     orders: [
       {
         orderNumber: 'WN-8NF4QA', deliveredDaysAgo: 8,
@@ -110,7 +117,7 @@ export const DEMO_CATALOG: readonly DemoCustomer[] = [
     ],
   },
   {
-    name: 'Grace Lee', email: 'grace.lee@example.com', scenario: '#7 two shirts, changed mind on one → AI asks which; approved',
+    name: 'Grace Lee', alias: 7, scenario: '#7 two shirts, changed mind on one → AI asks which; approved',
     orders: [
       {
         orderNumber: 'WN-4GK1VS', deliveredDaysAgo: 10,
@@ -122,13 +129,13 @@ export const DEMO_CATALOG: readonly DemoCustomer[] = [
     ],
   },
   {
-    name: 'Hassan Bello', email: 'hassan.bello@example.com', scenario: '#8 item denied before, resubmitted with a new reason → escalated',
+    name: 'Hassan Bello', alias: 8, scenario: '#8 item denied before, resubmitted with a new reason → escalated',
     orders: [
       { orderNumber: 'WN-Z2T5HM', deliveredDaysAgo: 12, items: [{ sku: 'HEADPH-OVR-BLK', name: 'Over-ear headphones', category: 'electronics', unitPricePaidMinor: 4000, quantity: 1 }] },
     ],
   },
   {
-    name: 'Ifeoma Nwosu', email: 'ifeoma.nwosu@example.com', scenario: '#9 four requests in the last 30 days → escalated (frequency)',
+    name: 'Ifeoma Nwosu', alias: 9, scenario: '#9 four requests in the last 30 days → escalated (frequency)',
     orders: [
       { orderNumber: 'WN-6PQ8XE', deliveredDaysAgo: 6, items: [{ sku: 'CANDLE-SOY-VAN', name: 'Soy candle, vanilla', category: 'home', unitPricePaidMinor: 3000, quantity: 1 }] },
       { orderNumber: 'WN-1YD4GU', deliveredDaysAgo: 15, items: [{ sku: 'TOWEL-BTH-SET', name: 'Bath towel set', category: 'home', unitPricePaidMinor: 4500, quantity: 1 }] },
@@ -136,13 +143,13 @@ export const DEMO_CATALOG: readonly DemoCustomer[] = [
     ],
   },
   {
-    name: 'Jide Afolabi', email: 'jide.afolabi@example.com', scenario: '#10 order not delivered yet → escalated',
+    name: 'Jide Afolabi', alias: 10, scenario: '#10 order not delivered yet → escalated',
     orders: [
       { orderNumber: 'WN-K5R2BW', deliveredDaysAgo: null, items: [{ sku: 'SPEAKER-BT-MINI', name: 'Bluetooth speaker, mini', category: 'electronics', unitPricePaidMinor: 5000, quantity: 1 }] },
     ],
   },
   {
-    name: 'Kemi Adeyemi', email: 'kemi.adeyemi@example.com', scenario: '#11 shirt + final-sale belt, changed mind → shirt refunded, belt not',
+    name: 'Kemi Adeyemi', alias: 11, scenario: '#11 shirt + final-sale belt, changed mind → shirt refunded, belt not',
     orders: [
       {
         orderNumber: 'WN-3VH9TL', deliveredDaysAgo: 7,
@@ -154,26 +161,26 @@ export const DEMO_CATALOG: readonly DemoCustomer[] = [
     ],
   },
   {
-    name: 'Lara Smith', email: 'lara.smith@example.com', scenario: '#12 eligible item, injection attempt in chat → escalated',
+    name: 'Lara Smith', alias: 12, scenario: '#12 eligible item, injection attempt in chat → escalated',
     orders: [
       { orderNumber: 'WN-7XW2QD', deliveredDaysAgo: 5, items: [{ sku: 'BOTTLE-STL-750', name: 'Steel water bottle, 750 ml', category: 'outdoor', unitPricePaidMinor: 5500, quantity: 1 }] },
     ],
   },
   {
-    name: 'Musa Ibrahim', email: 'musa.ibrahim@example.com', scenario: '#13 AI reads "changed mind", customer edits to "damaged" → escalated',
+    name: 'Musa Ibrahim', alias: 13, scenario: '#13 AI reads "changed mind", customer edits to "damaged" → escalated',
     orders: [
       { orderNumber: 'WN-B4N6ZR', deliveredDaysAgo: 6, items: [{ sku: 'BAG-BPK-GRY', name: 'Backpack, grey', category: 'accessories', unitPricePaidMinor: 6500, quantity: 1 }] },
       { orderNumber: 'WN-5QE1MK', deliveredDaysAgo: 40, items: [{ sku: 'CAP-BSB-BLK', name: 'Baseball cap, black', category: 'accessories', unitPricePaidMinor: 1800, quantity: 1 }] },
     ],
   },
   {
-    name: 'Ngozi Obi', email: 'ngozi.obi@example.com', scenario: '#14 exactly $500.00, damaged → approved (boundary)',
+    name: 'Ngozi Obi', alias: 14, scenario: '#14 exactly $500.00, damaged → approved (boundary)',
     orders: [
       { orderNumber: 'WN-2JC8WP', deliveredDaysAgo: 2, items: [{ sku: 'TABLET-10-128', name: 'Tablet 10", 128 GB', category: 'electronics', unitPricePaidMinor: 50000, quantity: 1 }] },
     ],
   },
   {
-    name: 'Obi Chukwu', email: 'obi.chukwu@example.com', scenario: '#15 item already fully refunded → nothing left to refund',
+    name: 'Obi Chukwu', alias: 15, scenario: '#15 item already fully refunded → nothing left to refund',
     orders: [
       { orderNumber: 'WN-H9F3LX', deliveredDaysAgo: 9, items: [{ sku: 'KETTLE-ELC-1L', name: 'Electric kettle, 1 L', category: 'home', unitPricePaidMinor: 7000, quantity: 1 }] },
       { orderNumber: 'WN-6TZ5DN', deliveredDaysAgo: 3, items: [{ sku: 'TOASTER-2SL', name: 'Toaster, 2-slice', category: 'home', unitPricePaidMinor: 3900, quantity: 1 }] },
@@ -188,18 +195,18 @@ export const DEMO_CATALOG: readonly DemoCustomer[] = [
  */
 export const DEMO_HISTORY: readonly DemoHistoryEntry[] = [
   // #9 Ifeoma: four requests in the last 30 days, each fine on its own.
-  { publicId: 'rr_9ynws0pw0001', customerEmail: 'ifeoma.nwosu@example.com', orderNumber: 'WN-9MA3CJ', daysAgo: 20, reason: 'DAMAGED', lines: [{ sku: 'PILLOW-MEM-STD', quantity: 1 }], expected: 'APPROVED' },
-  { publicId: 'rr_9ynws0pw0002', customerEmail: 'ifeoma.nwosu@example.com', orderNumber: 'WN-9MA3CJ', daysAgo: 16, reason: 'DAMAGED', lines: [{ sku: 'PILLOW-MEM-STD', quantity: 1 }], expected: 'APPROVED' },
-  { publicId: 'rr_9ynws0tw0003', customerEmail: 'ifeoma.nwosu@example.com', orderNumber: 'WN-1YD4GU', daysAgo: 12, reason: 'CHANGED_MIND', lines: [{ sku: 'TOWEL-BTH-SET', quantity: 1 }], expected: 'APPROVED' },
+  { publicId: 'rr_9ynws0pw0001', customerAlias: 9, orderNumber: 'WN-9MA3CJ', daysAgo: 20, reason: 'DAMAGED', lines: [{ sku: 'PILLOW-MEM-STD', quantity: 1 }], expected: 'APPROVED' },
+  { publicId: 'rr_9ynws0pw0002', customerAlias: 9, orderNumber: 'WN-9MA3CJ', daysAgo: 16, reason: 'DAMAGED', lines: [{ sku: 'PILLOW-MEM-STD', quantity: 1 }], expected: 'APPROVED' },
+  { publicId: 'rr_9ynws0tw0003', customerAlias: 9, orderNumber: 'WN-1YD4GU', daysAgo: 12, reason: 'CHANGED_MIND', lines: [{ sku: 'TOWEL-BTH-SET', quantity: 1 }], expected: 'APPROVED' },
   // #8 Hassan: an unclear request went to a person, who said no.
   {
-    publicId: 'rr_8hssn0hdph01', customerEmail: 'hassan.bello@example.com', orderNumber: 'WN-Z2T5HM', daysAgo: 9, reason: 'OTHER',
+    publicId: 'rr_8hssn0hdph01', customerAlias: 8, orderNumber: 'WN-Z2T5HM', daysAgo: 9, reason: 'OTHER',
     lines: [{ sku: 'HEADPH-OVR-BLK', quantity: 1 }], expected: 'ESCALATED',
     resolution: { approveSkus: [], note: 'Customer finds the headphones too quiet; they work as designed, so this is not a defect.', daysAfter: 1 },
   },
-  { publicId: 'rr_9ynws0pw0004', customerEmail: 'ifeoma.nwosu@example.com', orderNumber: 'WN-9MA3CJ', daysAgo: 8, reason: 'DAMAGED', lines: [{ sku: 'PILLOW-MEM-STD', quantity: 1 }], expected: 'APPROVED' },
+  { publicId: 'rr_9ynws0pw0004', customerAlias: 9, orderNumber: 'WN-9MA3CJ', daysAgo: 8, reason: 'DAMAGED', lines: [{ sku: 'PILLOW-MEM-STD', quantity: 1 }], expected: 'APPROVED' },
   // #15 Obi: the kettle has been fully refunded.
-  { publicId: 'rr_15bkett00001', customerEmail: 'obi.chukwu@example.com', orderNumber: 'WN-H9F3LX', daysAgo: 7, reason: 'DAMAGED', lines: [{ sku: 'KETTLE-ELC-1L', quantity: 1 }], expected: 'APPROVED' },
+  { publicId: 'rr_15bkett00001', customerAlias: 15, orderNumber: 'WN-H9F3LX', daysAgo: 7, reason: 'DAMAGED', lines: [{ sku: 'KETTLE-ELC-1L', quantity: 1 }], expected: 'APPROVED' },
   // #6 Femi: $300 chair already refunded on the order the $280 mat is from.
-  { publicId: 'rr_6fem0chr0001', customerEmail: 'femi.johnson@example.com', orderNumber: 'WN-8NF4QA', daysAgo: 6, reason: 'DAMAGED', lines: [{ sku: 'CHAIR-OFF-ERG', quantity: 1 }], expected: 'APPROVED' },
+  { publicId: 'rr_6fem0chr0001', customerAlias: 6, orderNumber: 'WN-8NF4QA', daysAgo: 6, reason: 'DAMAGED', lines: [{ sku: 'CHAIR-OFF-ERG', quantity: 1 }], expected: 'APPROVED' },
 ];

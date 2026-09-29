@@ -56,6 +56,11 @@ export function configureApp(app: NestExpressApplication): void {
       strictTransportSecurity: false,
     }),
   );
+  // API responses carry personal data; browsers and proxies must not keep copies.
+  app.use((_req: unknown, res: { setHeader(name: string, value: string): void }, next: () => void) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
   app.useBodyParser('json', { limit: JSON_BODY_LIMIT });
   app.use(cookieParser());
   app.use(requireCsrfHeader);

@@ -1,3 +1,4 @@
+import type { SessionsService } from '../auth/sessions.service.js';
 import type { Database } from '../database/database.providers.js';
 import type { DecisionService } from './decision.service.js';
 import { MAX_ATTEMPTS, SweeperService } from './sweeper.service.js';
@@ -12,11 +13,18 @@ function setup(intervalMs = 0) {
     decide: vi.fn(async () => true),
     escalateAfterSystemFailure: vi.fn(async () => true),
   };
-  const service = new TestSweeperService({} as Database, intervalMs, decisions as unknown as DecisionService);
-  return { service, decisions };
+  const sessions = { purgeExpired: vi.fn(async () => 0) };
+  const service = new TestSweeperService({} as Database, intervalMs, decisions as unknown as DecisionService, sessions as unknown as SessionsService);
+  return { service, decisions, sessions };
 }
 
 describe('SweeperService', () => {
+  it('removes expired sessions on every timer pass', async () => {
+    const { service, sessions } = setup();
+    await service.sweep();
+    expect(sessions.purgeExpired).toHaveBeenCalledOnce();
+  });
+
   it('re-runs the normal decision for a stuck request it takes over', async () => {
     const { service, decisions } = setup();
     service.findStuck.mockResolvedValue([{ id: 'a', attemptCount: 1 }]);

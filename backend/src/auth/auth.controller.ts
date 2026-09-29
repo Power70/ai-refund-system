@@ -23,6 +23,7 @@ export class AuthController {
   @ApiTooManyRequestsResponse()
   async signIn(@Body() body: StartSessionDto, @Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<SessionResponseDto> {
     const session = await this.auth.signIn(body.email, body.password);
+    await this.auth.signOut(req.cookies?.[SESSION_COOKIE]);
     res.cookie(SESSION_COOKIE, session.token, sessionCookieOptions(req.secure, undefined, session.expiresAt));
     return { firstName: session.firstName, expiresAt: session.expiresAt.toISOString() };
   }
@@ -42,7 +43,8 @@ export class AuthController {
   @Delete()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiNoContentResponse({ description: 'Signed out' })
-  signOut(@Req() req: Request, @Res({ passthrough: true }) res: Response): void {
+  async signOut(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<void> {
+    await this.auth.signOut(req.cookies?.[SESSION_COOKIE]);
     res.clearCookie(SESSION_COOKIE, sessionCookieOptions(req.secure));
   }
 }
@@ -55,13 +57,15 @@ export class AdminSessionController {
 
   @Post()
   @HttpCode(HttpStatus.OK)
+  @LoginRateLimit()
   @ApiOkResponse({ type: AdminSessionResponseDto })
   @ApiUnauthorizedResponse()
   @ApiTooManyRequestsResponse({ description: 'Too many wrong passwords from this IP' })
-  signIn(@Body() body: StartAdminSessionDto, @Req() req: Request, @Res({ passthrough: true }) res: Response): AdminSessionResponseDto {
-    const { result, session } = this.auth.startAdminSession(body.password, String(req.ip));
+  async signIn(@Body() body: StartAdminSessionDto, @Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<AdminSessionResponseDto> {
+    const { result, session } = await this.auth.startAdminSession(body.password, String(req.ip));
     if (result === 'locked') throw new HttpException(TOO_MANY_ATTEMPTS, HttpStatus.TOO_MANY_REQUESTS);
     if (!session) throw new UnauthorizedException(SIGN_IN_FAILED);
+    await this.auth.signOut(req.cookies?.[ADMIN_SESSION_COOKIE]);
     res.cookie(ADMIN_SESSION_COOKIE, session.token, sessionCookieOptions(req.secure, ADMIN_COOKIE_PATH, session.expiresAt));
     return { expiresAt: session.expiresAt.toISOString() };
   }
@@ -79,7 +83,8 @@ export class AdminSessionController {
   @Delete()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiNoContentResponse({ description: 'Signed out' })
-  signOut(@Req() req: Request, @Res({ passthrough: true }) res: Response): void {
+  async signOut(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<void> {
+    await this.auth.signOut(req.cookies?.[ADMIN_SESSION_COOKIE]);
     res.clearCookie(ADMIN_SESSION_COOKIE, sessionCookieOptions(req.secure, ADMIN_COOKIE_PATH));
   }
 }

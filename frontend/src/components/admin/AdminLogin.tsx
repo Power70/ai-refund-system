@@ -27,15 +27,12 @@ export function AdminLogin({ onSignedIn }: { onSignedIn: () => void }) {
     <SignInLayout icon={IconShieldLock} iconClassName="bg-slate-800" title="Support dashboard" subtitle="Enter the admin password to open the dashboard." onSubmit={handleSubmit}>
       <label className="block">
         <span className="text-sm font-medium text-slate-700">Password</span>
-        <input type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className={`mt-1 w-full ${inputClass}`} />
+        <input type="password" required maxLength={200} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className={`mt-1 w-full ${inputClass}`} />
       </label>
       {error && <Alert>{error}</Alert>}
       <Button type="submit" icon={IconLock} busy={busy} disabled={busy} className="w-full py-2.5">
         Open dashboard
       </Button>
-      <p className="text-xs text-slate-500">
-        Demo password: <code className="font-mono">admin</code> (set <code className="font-mono">ADMIN_PASSWORD</code> to change it).
-      </p>
     </SignInLayout>
   )
 }

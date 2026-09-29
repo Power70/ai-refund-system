@@ -56,7 +56,7 @@ describe('database schema (e2e, real PostgreSQL)', () => {
     );
     expect(rows.map((r) => r.table_name)).toEqual([
       'ai_calls', 'audit_events', 'conversation_messages', 'conversations', 'customers', 'decisions', 'order_items', 'orders',
-      'policy_versions', 'refund_request_lines', 'refund_requests', 'review_resolutions',
+      'policy_versions', 'refund_request_lines', 'refund_requests', 'review_resolutions', 'sessions',
     ]);
   });
 
