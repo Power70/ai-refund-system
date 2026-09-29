@@ -85,10 +85,12 @@ interface SignInLayoutProps {
   subtitle: string
   onSubmit: (event: FormEvent) => void
   children: ReactNode
+  /** A link to the other entry page, shown under the form. */
+  switchLink: { href: string; label: string }
 }
 
 /** Centered sign-in form shared by the customer and admin entry pages. */
-export function SignInLayout({ icon: HeaderIcon, iconClassName, title, subtitle, onSubmit, children }: SignInLayoutProps) {
+export function SignInLayout({ icon: HeaderIcon, iconClassName, title, subtitle, onSubmit, children, switchLink }: SignInLayoutProps) {
   return (
     <main className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-md flex-col justify-center px-4 py-10">
       <div className="mb-6 flex items-center gap-3">
@@ -103,6 +105,9 @@ export function SignInLayout({ icon: HeaderIcon, iconClassName, title, subtitle,
       <form onSubmit={onSubmit} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         {children}
       </form>
+      <a href={switchLink.href} className="mt-4 self-center text-sm text-slate-600 underline-offset-4 hover:text-slate-900 hover:underline">
+        {switchLink.label}
+      </a>
     </main>
   )
 }

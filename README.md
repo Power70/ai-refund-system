@@ -27,13 +27,16 @@ docker-compose up --build
 
 Open <http://localhost:8080>. Migrations and demo data load automatically; no `.env` file is needed.
 
+> **To see the AI, add a key first.** Copy `.env.example` to `.env` and set `LLM_API_KEY` (any [supported provider](#configuration)). Without a key the app still runs end to end, but the chat is replaced by a short form and every refund the policy would approve waits for a reviewer.
+>
+> **Each scenario can be used once.** A submitted claim uses up that order, and a customer can start 10 conversations a day. To start over with fresh data: `docker-compose down -v && docker-compose up --build`.
+
 | | |
 |---|---|
 | Customer app | <http://localhost:8080>: customer N (1 to 15, see [scenarios](#try-the-demo-scenarios)) signs in as `nwisuanu+N@gmail.com` with the password `customer` |
 | Support dashboard | <http://localhost:8080/#/admin>, password `admin` |
-| API docs (Swagger) | <http://localhost:8080/docs>, when `API_DOCS=true` |
 
-These are local demo values. To change them, or to enable the AI, copy `.env.example` to `.env` (git-ignored) and set the values there:
+These are local demo values. To change them, copy `.env.example` to `.env` (git-ignored) and set the values there:
 
 | Variable | Demo value | What it is |
 |---|---|---|
@@ -45,8 +48,6 @@ These are local demo values. To change them, or to enable the AI, copy `.env.exa
 
 Use your own passwords for anything beyond a local demo; `openssl rand -hex 24` makes a good one. After changing the seed or database values, recreate the database with `docker-compose down -v`.
 
-Without a key the app still works end to end: the chat switches to a short form, the policy still decides, and refunds it would approve go to a reviewer instead of being paid automatically.
-
 Check a running stack with the smoke test (bash and curl; on Windows use Git Bash or WSL):
 
 ```bash
@@ -57,7 +58,7 @@ It uses the same passwords as the stack (from `.env`, or the demo values) and ch
 
 ## Configuration
 
-`.env.example` documents every variable. Compose reads `.env` from the project root when one exists; every variable has a default.
+`.env.example` lists the variables you can set. Compose reads `.env` from the project root when one exists; every variable has a default.
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -113,9 +114,9 @@ Approvals need the AI: an approval stands only when the AI's reading of the conv
 
 A timed walkthrough of these scenarios is in [`docs/demo-video-script.md`](docs/demo-video-script.md).
 
-After a decision, the chat keeps going: ask "why?" or "when will I get my money?" and it answers from the stored decision. The support dashboard has two sections in a left-hand sidebar (a tab row on phones). **Refund requests** shows every case with its transcript, the rules that fired, the AI's suggestion and an audit timeline; escalations are resolved item by item with a required note. **Customers** is a searchable, read-only list of customers with their order and request counts and refunded totals; opening one shows every order with its items and what was refunded, and every refund request. A dot next to the dashboard title shows whether the AI is online, degraded or off. The queue shows 10 cases per page, with Previous and Next. Customers and reviewers use separate addresses with no link between them, both sign out from the top bar and stay signed in across reloads, and a small "Trying to reconnect…" notice appears only while the service can't be reached.
+After a decision, the chat keeps going: ask "why?" or "when will I get my money?" and it answers from the stored decision. Customers can also browse **Your orders** and **My requests**; a request where only some items were refunded shows as **Partly approved**.
 
-**Your orders** lists each order's items with their prices; opening an order shows its dates, totals, what has been refunded and the refund requests made for it. Each request under **My requests** opens with its latest outcome, including a reviewer's decision made after the page loaded. A request where only some items were refunded, by the policy or a reviewer, shows as **Partly approved** rather than *Approved*; the stored decision keeps the policy's status. The layout is mobile first: on a phone the workspace switches between **Chat**, **Orders** and **Requests** tabs, and the review queue shows each case as a card.
+The support dashboard has two sections. **Refund requests** shows every case with its transcript, the rules that fired, the AI's suggestion and an audit timeline; escalations are resolved item by item with a required note. **Customers** is a searchable, read-only list of customers with their orders and requests. A dot next to the title shows whether the AI is online, degraded or off.
 
 ## Architecture
 
@@ -245,7 +246,7 @@ Each request records the policy version in force when it was submitted; retries 
 | Duplicate submission (double click, retry, flaky network) | Same `Idempotency-Key` and claim returns the original request; a different claim under the same key is `409` |
 | Two submissions for the same item at once | Row locks serialise them; the second sees the first reservation (`409 ALREADY_IN_PROGRESS`) |
 | Crash between the two transactions | The request stays *Processing* with its reservation; a retry or the sweeper (every 30 s) finishes it; after 3 attempts a person gets it |
-| Decision still running after `SUBMIT_WAIT_MS` (default 3 s, e.g. a slow model) | `202` with status *Processing*; the decision finishes in the background and the page polls until it is decided |
+| Decision still running after 3 seconds (e.g. a slow model) | `202` with status *Processing*; the decision finishes in the background and the page polls until it is decided |
 | Database unreachable | Bounded connection waits; the public health check turns unhealthy; requests fail fast |
 | Policy file invalid or conflicting | The API refuses to start and logs the reason; the previous version stays in the database |
 | Two reviewers resolve the same case | The request row is locked; exactly one wins, the other gets `409 ALREADY_RESOLVED` |
@@ -281,14 +282,19 @@ They cover the behaviour that protects the customer and the reviewer: every retr
 
 ## Local development
 
-```bash
-# API on :3000. Needs PostgreSQL; the API reads its settings from the environment only.
-set -a && . ./.env && set +a
-export DATABASE_URL=postgresql://$POSTGRES_USER:$POSTGRES_PASSWORD@localhost:5432/$POSTGRES_DB
-cd backend && npm install && npm run db:migrate && npm run db:seed && npm run start:dev
+Requires Node.js 24 and a PostgreSQL 16 server on `localhost:5432` (the Compose database is not published to the host; the throwaway server under [Testing](#testing) works).
 
-# Frontend on :5173, proxying /api and /docs to :3000
-cd frontend && npm install && npm run dev
+```bash
+# Terminal 1: API on :3000. It reads its settings from the environment only.
+cd backend
+export DATABASE_URL=postgresql://refund:$TEST_PG_PASSWORD@localhost:5432/postgres
+export ADMIN_PASSWORD=admin SEED_CUSTOMER_EMAIL=nwisuanu@gmail.com SEED_CUSTOMER_PASSWORD=customer
+export LLM_API_KEY=   # optional
+npm install && npm run db:migrate && npm run db:seed && npm run start:dev
+
+# Terminal 2: frontend on :5173, proxying /api and /docs to :3000
+cd frontend
+npm install && npm run dev
 ```
 
 Schema changes: edit `backend/src/database/schema.ts`, then `npm run db:generate` writes a new SQL migration to `backend/drizzle/`.
@@ -303,7 +309,7 @@ Stack: NestJS 12, TypeScript, Drizzle ORM, PostgreSQL 16, zod, Vitest; React 19,
 - **Business calls encoded in the policy:** refunds over $500 on an order (cumulative, so splitting doesn't help), a fifth request within 30 days, a final-sale item claimed as damaged and an item denied before all go to a person.
 - **Damage is taken at the customer's word** for automatic approvals within the rules. Photo evidence is out of scope, so a persistent false claimant is caught by the frequency and history rules rather than by evidence.
 - **In-process processing.** A submission waits up to 3 seconds for its decision, then answers `202` while the decision finishes in the background under its lease; the sweeper recovers anything a crash leaves behind. The page polls for the result (every 1.5 s, for about a minute) rather than holding a live connection. This is enough for one API instance and needs no queue infrastructure; see future work for scaling.
-- **A deliberately small frontend.** The original plan named shadcn/ui, TanStack Query, React Router and generated OpenAPI types. The app has two screens behind one hash route and a handful of API calls, so it uses plain React state, one small polling hook (`usePolledData`), its own Tailwind components and hand-written API types in `frontend/src/api/client.ts`. That keeps the bundle and the dependency list small, at a cost: the types mirror the backend DTOs by hand, so a contract change must be made in both places. The backend's end-to-end tests assert the response shapes and the frontend tests type-check their mocked responses against the same types, which catches most drift; generating the types from the OpenAPI document behind `/docs` is the next step if the API grows.
+- **A deliberately small frontend.** shadcn/ui, TanStack Query, React Router and generated OpenAPI types were considered. The app has two screens behind one hash route and a handful of API calls, so it uses plain React state, one small polling hook (`usePolledData`), its own Tailwind components and hand-written API types in `frontend/src/api/client.ts`. That keeps the bundle and the dependency list small, at a cost: the types mirror the backend DTOs by hand, so a contract change must be made in both places. The backend's end-to-end tests assert the response shapes and the frontend tests type-check their mocked responses against the same types, which catches most drift; generating the types from the OpenAPI document behind `/docs` is the next step if the API grows.
 - **Out of scope:** real payments (no payment call exists anywhere), photo uploads, live human chat, multi-account fraud detection, a policy editing UI, SSO/RBAC.
 - **Retention:** transcripts contain personal data. The assumed retention is 90 days, applied by a scheduled job in production; it is not implemented here.
 

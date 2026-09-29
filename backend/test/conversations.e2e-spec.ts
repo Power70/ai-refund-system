@@ -304,7 +304,7 @@ describe('customer conversations with AI disabled (e2e)', () => {
     const ada = await customerClient(app, 'customer+1@example.test');
     const { body } = await request(app.getHttpServer()).post(BASE).set('Cookie', ada.cookie).set(CSRF).expect(201);
     expect(body).toMatchObject({ mode: 'MANUAL', proposal: null });
-    expect(body.messages[0].text).toMatch(/^Hi Ada, choose the item, quantity and reason in the form below/);
+    expect(body.messages[0].text).toMatch(/^Hi Ada, our chat assistant is offline right now\. Choose the item, quantity and reason in the form below/);
 
     const reply = await request(app.getHttpServer())
       .post(`${BASE}/${body.conversationId}/messages`)

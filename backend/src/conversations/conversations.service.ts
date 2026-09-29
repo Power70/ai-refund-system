@@ -26,7 +26,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const PENDING_STALE_MS = 60_000;
 
 const MESSAGES = {
-  greetingManual: (firstName: string) => `Hi ${firstName}, choose the item, quantity and reason in the form below and we'll take it from there.`,
+  greetingManual: (firstName: string) => `Hi ${firstName}, our chat assistant is offline right now. Choose the item, quantity and reason in the form below and a member of our support team will review your request.`,
   manual: 'Please use the form below to choose the item, quantity and reason.',
   aiFailed: "Sorry, I didn't quite get that. Which item is this about, and what went wrong?",
   handover: "Let's fill this in directly. Choose the item, quantity and reason in the form below.",

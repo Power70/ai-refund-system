@@ -48,10 +48,10 @@ export function validateEnv(raw: Record<string, unknown>): Env {
   return validateWith(envSchema, raw);
 }
 
-/** What the one-shot seed needs on top of the database: the demo customers' sign-in details. */
 /** What the one-shot migration step needs: only the database. */
 export const migrateEnvSchema = z.object({ DATABASE_URL: envSchema.shape.DATABASE_URL });
 
+/** What the one-shot seed needs on top of the database: the demo customers' sign-in details. */
 export const seedEnvSchema = z.object({
   NODE_ENV: envSchema.shape.NODE_ENV,
   DATABASE_URL: envSchema.shape.DATABASE_URL,

@@ -12,7 +12,7 @@ Keep two browser windows open: the customer app at <http://localhost:8080> and t
 
 | Time | Show | Say |
 |---|---|---|
-| 0:00–0:20 | Terminal: `docker-compose up`, then the sign-in page | "One command starts the database, migrations with demo data, the API and the web app. Demo passwords are built in; an AI key is optional." |
+| 0:00–0:20 | Terminal: `docker-compose up`, then the sign-in page | "One command starts the database, migrations with demo data, the API and the web app. Demo passwords are built in. I've put an AI key in .env; without one the app still runs, as I'll show at the end." |
 | 0:20–1:10 | **#1 Ada** (`+1`). Type "The shirt I got last week arrived torn". The assistant finds the Oxford shirt and shows the confirmation card. Submit. The decision card shows **Approved, $49.99**. Ask "why was it approved?" | "The customer writes in plain words. The AI works out the order, item and reason and pre-fills a claim, but nothing is decided until the customer confirms it. The policy decides, the AI only explains, and its answer is checked against the stored decision." |
 | 1:10–1:40 | **#7 Grace** (`+7`). Type "I changed my mind about one of the shirts". Tap the chip for the blue shirt, submit: **Approved, $80.00** | "When the message is ambiguous, the AI asks one question with tap-able answers instead of guessing." |
 | 1:40–2:00 | **#3 Chika** (`+3`). "I changed my mind about the leather belt": **Denied**, with the policy's reason | "Denials always come from the policy, worded from the policy, never invented by the model." |

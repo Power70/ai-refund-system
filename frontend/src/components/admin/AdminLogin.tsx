@@ -24,7 +24,7 @@ export function AdminLogin({ onSignedIn }: { onSignedIn: () => void }) {
   }
 
   return (
-    <SignInLayout icon={IconShieldLock} iconClassName="bg-slate-800" title="Support dashboard" subtitle="Enter the admin password to open the dashboard." onSubmit={handleSubmit}>
+    <SignInLayout icon={IconShieldLock} iconClassName="bg-slate-800" title="Support dashboard" subtitle="Enter the admin password to open the dashboard." onSubmit={handleSubmit} switchLink={{ href: '#/', label: 'Customer? Go to customer sign-in' }}>
       <label className="block">
         <span className="text-sm font-medium text-slate-700">Password</span>
         <input type="password" required maxLength={200} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className={`mt-1 w-full ${inputClass}`} />

@@ -1,14 +1,13 @@
 {
   "name": "ai-refund-backend",
   "version": "0.0.1",
-  "description": "",
+  "description": "Refund support API: conversations, policy engine and review dashboard",
   "author": "",
   "private": true,
   "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "build": "nest build",
-    "deploy": "nest deploy",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
     "start:dev": "nest start --watch",

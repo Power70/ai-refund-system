@@ -31,6 +31,7 @@ export function SignInPage({ onSignedIn }: { onSignedIn: (firstName: string) => 
       title="Refund support"
       subtitle="Sign in with your email and password."
       onSubmit={handleSubmit}
+      switchLink={{ href: '#/admin', label: 'Support staff? Open the support dashboard' }}
     >
       <label className="block">
         <span className="text-sm font-medium text-slate-700">Email</span>
