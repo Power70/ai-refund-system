@@ -1,5 +1,7 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap, type OnApplicationShutdown } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { and, asc, eq, lt } from 'drizzle-orm';
+import { runWithCorrelation } from '../common/correlation.js';
 import { DATABASE, type Database } from '../database/database.providers.js';
 import { refundRequests } from '../database/schema.js';
 import { DecisionService } from './decision.service.js';
@@ -52,7 +54,8 @@ export class SweeperService implements OnApplicationBootstrap, OnApplicationShut
 
   /** Timer entry point: passes never overlap, and a failed pass is logged and retried next tick. */
   sweep(): Promise<SweepResult | null> {
-    this.running ??= this.sweepOnce()
+    // Each pass has its own correlation ID, so its audit records and log lines group together.
+    this.running ??= runWithCorrelation(`sweep-${randomUUID()}`, () => this.sweepOnce())
       .then((result) => {
         if (result.found > 0) this.logger.log(`Swept ${result.found}: ${result.decided} decided, ${result.escalated} escalated, ${result.retryLater} to retry`);
         return result;

@@ -1,4 +1,5 @@
 import { sql } from 'drizzle-orm';
+import { correlationId } from '../common/correlation.js';
 import { pgEnum, check, pgTable, text, timestamp, uuid, char, index, unique, boolean, integer, uniqueIndex, jsonb, foreignKey } from 'drizzle-orm/pg-core';
 import type { RequestEvaluation } from '../policy/policy-engine.js';
 import { POLICY_OUTCOMES, REFUND_REASONS, type PolicyDocument } from '../policy/policy-schema.js';
@@ -361,7 +362,8 @@ export const auditEvents = pgTable(
     type: text('type').notNull(),
     actor: auditActorEnum('actor').notNull(),
     data: jsonb('data').notNull().default({}),
-    correlationId: text('correlation_id'),
+    // Filled from the current HTTP request or sweeper pass (see common/correlation.ts).
+    correlationId: text('correlation_id').$defaultFn(() => correlationId() ?? sql`NULL`),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index('audit_events_request_created_idx').on(t.requestId, t.createdAt)],

@@ -1,9 +1,10 @@
-import { ValidationPipe, type INestApplication } from '@nestjs/common';
+import { ConsoleLogger, ValidationPipe, type INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import type { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
+import { correlationId, correlationMiddleware } from './correlation.js';
 
 export const API_PREFIX = 'api/v1';
 export const DOCS_PATH = 'docs';
@@ -46,6 +47,7 @@ export function configureApp(app: NestExpressApplication): void {
   // so rate limiting (added later) sees the real client IP.
   app.set('trust proxy', 'loopback, uniquelocal');
   app.setGlobalPrefix(API_PREFIX);
+  app.use(correlationMiddleware);
   app.use(
     helmet({
       // The demo is served over plain HTTP on localhost. Forcing HTTPS would
@@ -61,4 +63,12 @@ export function configureApp(app: NestExpressApplication): void {
     new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
   );
   app.enableShutdownHooks();
+}
+
+/** Nest's console logger with the current correlation ID after the context, e.g. `[RefundsService] [req 1f3c…]`. */
+export class CorrelatedLogger extends ConsoleLogger {
+  protected formatContext(context: string): string {
+    const id = correlationId();
+    return id ? `${super.formatContext(context)}[req ${id}] ` : super.formatContext(context);
+  }
 }

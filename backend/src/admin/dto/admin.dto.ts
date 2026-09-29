@@ -131,7 +131,7 @@ export class CaseBriefDto {
   } | null;
   @ApiProperty({ description: 'True when the summary was withheld because injection was flagged' }) aiSummarySuppressed: boolean;
   @ApiProperty() aiCalls: { kind: string; provider: string | null; model: string | null; outcome: string; attempts: number; latencyMs: number; inputTokens: number | null; outputTokens: number | null; at: string }[];
-  @ApiProperty() audit: { type: string; actor: string; data: unknown; at: string }[];
+  @ApiProperty({ description: 'correlationId: the API request (or sweeper pass) that wrote the event' }) audit: { type: string; actor: string; data: unknown; correlationId: string | null; at: string }[];
 }
 
 export class RequestCountsDto {

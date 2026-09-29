@@ -49,7 +49,8 @@ describe('refund submission (e2e)', () => {
     const grace = await customerClient(app, 'grace.lee@example.com', 'WN-4GK1VS');
     const body = { orderNumber: 'WN-4GK1VS', reason: 'CHANGED_MIND', lines: [{ itemId: grace.itemId('Linen shirt, blue'), quantity: 1 }] };
     const key = crypto.randomUUID();
-    const res = await grace.submit(body, key).expect(201);
+    const res = await grace.submit(body, key).set('X-Request-Id', 'edge-req-000001').expect(201);
+    expect(res.headers['x-request-id']).toBe('edge-req-000001');
     expect(res.body).toMatchObject({ status: 'ESCALATED', approvedAmountMinor: 0, lines: [{ outcome: 'UNDER_REVIEW' }] });
     expect(res.body.customerMessage).toBe("Thanks for your patience. We're taking a closer look at your request and will get back to you within 2 business days.");
 
@@ -59,6 +60,8 @@ describe('refund submission (e2e)', () => {
     expect(decision.gateResult).toMatchObject({ policyStatus: 'APPROVED', status: 'ESCALATED', reasons: ['NO_AI_ASSESSMENT'] });
     expect(lines).toMatchObject([{ lineOutcome: 'ALLOW', decidingRuleId: 'CHANGE_OF_MIND_ELIGIBLE', finalLineStatus: 'UNDER_REVIEW', amountMinor: 8000 }]);
     expect(audit.map((a) => a.type)).toEqual(['REQUEST_RECEIVED', 'POLICY_EVALUATED', 'SAFETY_GATE_APPLIED', 'DECISION_RECORDED']);
+    // Every event carries the ID of the HTTP request that caused it.
+    expect(audit.map((a) => a.correlationId)).toEqual(Array(4).fill('edge-req-000001'));
 
     // Same key + same claim: the stored answer, unchanged.
     const replay = await grace.submit(body, key).expect(200);
@@ -228,6 +231,9 @@ describe('refund submission (e2e)', () => {
         },
         { timeout: 3_000, interval: 100 },
       );
+      // The decision finished after the response, still under the submission's request ID.
+      const { audit } = await stored(res.body.requestId);
+      expect(new Set(audit.map((a) => a.correlationId))).toEqual(new Set([res.headers['x-request-id']]));
     } finally {
       await slowApp.close();
     }

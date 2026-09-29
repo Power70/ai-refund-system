@@ -239,7 +239,7 @@ export class AdminService {
         outputTokens: c.outputTokens,
         at: c.createdAt.toISOString(),
       })),
-      audit: audit.map((a) => ({ type: a.type, actor: a.actor, data: a.data, at: a.createdAt.toISOString() })),
+      audit: audit.map((a) => ({ type: a.type, actor: a.actor, data: a.data, correlationId: a.correlationId, at: a.createdAt.toISOString() })),
     };
   }
 

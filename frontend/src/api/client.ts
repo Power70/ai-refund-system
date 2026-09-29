@@ -258,7 +258,7 @@ export interface CaseBrief {
   aiSummary: { summary: string; suggestedAction: 'APPROVE' | 'DENY' | 'NEEDS_INFO'; rationale: string } | null
   aiSummarySuppressed: boolean
   aiCalls: { kind: string; provider: string | null; model: string | null; outcome: string; attempts: number; latencyMs: number; inputTokens: number | null; outputTokens: number | null; at: string }[]
-  audit: { type: string; actor: string; data: unknown; at: string }[]
+  audit: { type: string; actor: string; data: unknown; correlationId: string | null; at: string }[]
 }
 
 export function adminApi(token: string) {

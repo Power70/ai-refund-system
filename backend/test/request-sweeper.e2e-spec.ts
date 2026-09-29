@@ -70,6 +70,15 @@ describe('request sweeper (e2e, real PostgreSQL)', () => {
     expect(audit).toEqual(['PROCESSING_RESUMED', 'POLICY_EVALUATED', 'SAFETY_GATE_APPLIED', 'DECISION_RECORDED']);
   });
 
+  it('tags the audit events of each pass with one sweep ID', async () => {
+    const stuck = await strandedRequest(db, { orderNumber: 'WN-9TB6RW', sku: 'BELT-LTH-BRN', reason: 'CHANGED_MIND', leaseExpiresAt: EXPIRED() });
+    await sweeper.sweep();
+    const ids = (await db.select().from(schema.auditEvents).where(eq(schema.auditEvents.requestId, stuck.id))).filter((a) => a.type !== 'REQUEST_RECEIVED').map((a) => a.correlationId);
+    expect(ids).toHaveLength(4);
+    expect(new Set(ids).size).toBe(1);
+    expect(ids[0]).toMatch(/^sweep-[0-9a-f-]{36}$/);
+  });
+
   it('leaves a request alone while its worker still holds the lease', async () => {
     const busy = await strandedRequest(db, { orderNumber: 'WN-7K3P9Q', sku: 'SHIRT-OXF-BLU-M', reason: 'DAMAGED', leaseExpiresAt: LIVE() });
     expect((await sweeper.sweepOnce()).found).toBe(0);

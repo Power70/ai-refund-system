@@ -165,6 +165,8 @@ sequenceDiagram
 5. **Transaction 2** stores the decision, line outcomes and audit events, but only if this worker still holds the lease. A worker that lost its lease can never write a second decision.
 6. **Recovery.** If the process dies between the two transactions, the request stays *Processing*. A customer retry or the background sweeper takes it over once the lease expires; after three failed attempts it is escalated to a person (`SYSTEM_PROCESSING_FAILURE`).
 
+**Tracing.** Every API request carries one ID from start to finish. Nginx generates it (`$request_id`), writes it to its access log and passes it as `X-Request-Id`; running without Nginx, the API accepts a well-formed incoming ID or creates one. The API returns the ID in the response header, adds it to its log lines (`[req …]`) and stores it on every audit event the request writes, including events written after a `202` response. Each sweeper pass has its own `sweep-…` ID. The case view in the dashboard API lists each audit event with its ID.
+
 ## AI design
 
 The AI has three jobs, none of which can approve money:
